@@ -239,9 +239,29 @@ func (view *ReplayView) Init(app *tview.Application) {
 	view.response.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlE {
 			if req, ok := view.entries[id]; ok {
-				_ = runEditor(app, req.RawRequest)
-			}
-		}
+				app.EnableMouse(false)
+				app.Suspend(func() {
+					file, err := ioutil.TempFile(os.TempDir(), "glorp")
+					if err != nil {
+						log.Println(err)
+						return
+					}
+					defer os.Remove(file.Name())
+
+					file.Write(req.RawResponse)
+					file.Close()
+					cmd := exec.Command("/usr/bin/view", "-b", file.Name())
+					cmd.Stdout = os.Stdout
+					cmd.Stdin = os.Stdin
+					cmd.Stderr = os.Stderr
+					if err := cmd.Run(); err != nil {
+						log.Printf("failed to start editor: %v\n", err)
+					}
+				})
+
+				app.EnableMouse(true)
+		    }
+        }
 		return event
 	})
 
@@ -377,38 +397,4 @@ func (view *ReplayView) refreshReplay(r *replay.Request) {
 	fmt.Fprint(view.response, "\u2800")
 
 	view.response.ScrollToBeginning()
-}
-
-// run an external editor, passing a temp file with inputBuffer as its contents as argv[1]
-func runEditor(app *tview.Application, inputBuffer []byte) []byte {
-	var outputBuffer []byte
-	app.EnableMouse(false)
-	app.Suspend(func() {
-		file, err := ioutil.TempFile(os.TempDir(), "glorp")
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		defer os.Remove(file.Name())
-
-		file.Write(inputBuffer)
-		file.Close()
-
-		cmd := exec.Command("/usr/bin/vi", "-b", file.Name())
-		cmd.Stdout = os.Stdout
-		cmd.Stdin = os.Stdin
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			log.Printf("failed to start editor: %v\n", err)
-		}
-
-		// load the tmp file back into the request buffer
-		outputBuffer, err = ioutil.ReadFile(file.Name())
-		if err != nil {
-			log.Println(err)
-			return
-		}
-	})
-	app.EnableMouse(true)
-	return outputBuffer
 }
