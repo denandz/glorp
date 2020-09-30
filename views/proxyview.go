@@ -15,6 +15,7 @@ import (
 	"strconv"
 
 	"github.com/gdamore/tcell"
+	"github.com/google/martian/messageview"
 	"github.com/rivo/tview"
 )
 
@@ -142,8 +143,7 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView) {
 				view.requestBox.ScrollToBeginning()
 			}
 			if entry.Response != nil {
-				fmt.Fprint(view.responseBox, string(entry.Response.Raw))
-				fmt.Fprint(view.responseBox, "\u2800")
+				view.writeResponse(entry.Response)
 
 				view.responseBox.ScrollToBeginning()
 			}
@@ -315,4 +315,35 @@ func (view *ProxyView) createProxy(app *tview.Application) {
 	}()
 
 	view.Logger = modifier.NewLogger(app, view.proxychan, view.Table)
+}
+
+func (view *ProxyView) writeResponse(r *modifier.Response) {
+	reader := bytes.NewReader(r.Raw)
+	resp, err := http.ReadResponse(bufio.NewReader(reader), nil)
+
+	if err != nil {
+		log.Printf("[!] Error writeResponse %s\n", err)
+		return
+	}
+
+	mv := messageview.New()
+	if err := mv.SnapshotResponse(resp); err != nil {
+		log.Printf("[!] Error writeResponse %s\n", err)
+		return
+	}
+
+	br, err := mv.Reader(messageview.Decode())
+	if err != nil {
+		log.Printf("[!] Error writeResponse %s\n", err)
+		return
+	}
+
+	body, err := ioutil.ReadAll(br)
+	if err != nil {
+		log.Printf("[!] Error writeResponse %s\n", err)
+		return
+	}
+
+	fmt.Fprint(view.responseBox, string(body)) //string(r.Raw))
+	fmt.Fprint(view.responseBox, "\u2800")
 }
