@@ -139,12 +139,12 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView) {
 
 				// this technique seems to make weird artifecats happen depending on the terminal
 				// some sensible mechanism for escaping data would probably be better...
-				fmt.Fprint(view.requestBox, "\u2800")
+				//fmt.Fprint(view.requestBox, "\u2800")
+				view.writeRequest(entry.Request)
 				view.requestBox.ScrollToBeginning()
 			}
 			if entry.Response != nil {
 				view.writeResponse(entry.Response)
-
 				view.responseBox.ScrollToBeginning()
 			}
 		}
@@ -315,6 +315,37 @@ func (view *ProxyView) createProxy(app *tview.Application) {
 	}()
 
 	view.Logger = modifier.NewLogger(app, view.proxychan, view.Table)
+}
+
+func (view *ProxyView) writeRequest(r *modifier.Request) {
+	reader := bytes.NewReader(r.Raw)
+	req, err := http.ReadRequest(bufio.NewReader(reader))
+
+	if err != nil {
+		log.Printf("[!] Error writeRequest %s\n", err)
+		return
+	}
+
+	mv := messageview.New()
+	if err := mv.SnapshotRequest(req); err != nil {
+		log.Printf("[!] Error writeRequest %s\n", err)
+		return
+	}
+
+	br, err := mv.Reader(messageview.Decode())
+	if err != nil {
+		log.Printf("[!] Error writeRequest %s\n", err)
+		return
+	}
+
+	body, err := ioutil.ReadAll(br)
+	if err != nil {
+		log.Printf("[!] Error writeRequest %s\n", err)
+		return
+	}
+
+	fmt.Fprint(view.responseBox, string(body)) //string(r.Raw))
+	fmt.Fprint(view.responseBox, "\u2800")
 }
 
 func (view *ProxyView) writeResponse(r *modifier.Response) {
