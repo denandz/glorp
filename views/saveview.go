@@ -47,14 +47,18 @@ func (view *SaveRestoreView) Init(app *tview.Application, replays *ReplayView, p
 			} else {
 				msg = "Save Failed"
 			}
-
+			notifModal(app, view.Layout, msg)
 		} else {
-			msg = "File Exists"
+			boolModal(app, view.Layout, "File exists - overwrite?", func(b bool) {
+				if b == true {
+					if !Save(filename.GetText(), replays, proxy) {
+						log.Println("[!] Error: Save failed")
+					}
+				}
+			})
 		}
-
-		notifModal(app, view.Layout, msg)
-
-	}).AddButton("Load", func() {
+	})
+	form.AddButton("Load", func() {
 		if Load(filename.GetText(), replays, proxy) {
 			msg = "Loaded"
 		} else {
