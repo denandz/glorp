@@ -6,6 +6,17 @@ The idea is to provide a CLI based tool for when you wanna-look-at-this-thing-re
 
 ![page switching](./gif/glorp.gif)
 
+## Install
+
+Install can be done with `git clone` and `go build/install`, or by using one of the binaries available on the releases page.
+
+Alternatively, to run under docker, clone this repository and:
+
+```
+docker build -tglorp .
+docker run -p 8080:8080 --rm -it glorp
+```
+
 ## Command Line Flags
 
 ```
