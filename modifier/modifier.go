@@ -72,6 +72,8 @@ type Response struct {
 	HTTPVersion string `json:"httpVersion"`
 	// RedirectURL is the target URL from the Location response header.
 	RedirectURL string `json:"redirectURL"`
+	// Headers stores the response headers
+	Headers http.Header `json:"headers"`
 	// BodySize is the size of the request body (POST data payload) in bytes. Set
 	// to -1 if the info is not available.
 	BodySize int64 `json:"bodySize"`
@@ -199,6 +201,7 @@ func NewResponse(res *http.Response) (*Response, error) {
 		Status:      res.StatusCode,
 		StatusText:  http.StatusText(res.StatusCode),
 		BodySize:    res.ContentLength,
+		Headers:     res.Header.Clone(),
 	}
 
 	raw, err := httputil.DumpResponse(res, true)

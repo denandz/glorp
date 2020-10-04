@@ -63,7 +63,7 @@ func main() {
 
 	// Save/load view
 	saveview := new(views.SaveRestoreView)
-	saveview.Init(replayview, proxyview)
+	saveview.Init(app, replayview, proxyview)
 
 	// Pages
 	pages := []Window{

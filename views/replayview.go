@@ -260,8 +260,8 @@ func (view *ReplayView) Init(app *tview.Application) {
 				})
 
 				app.EnableMouse(true)
-		    }
-        }
+			}
+		}
 		return event
 	})
 
@@ -292,8 +292,6 @@ func (view *ReplayView) Init(app *tview.Application) {
 
 	view.Layout.AddPage("mainLayout", mainLayout, true, true)
 
-	renameInput := tview.NewInputField()
-
 	mainLayout.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyTab:
@@ -322,59 +320,21 @@ func (view *ReplayView) Init(app *tview.Application) {
 
 		case tcell.KeyCtrlX:
 			if _, ok := view.entries[id]; ok {
-				renameInput.SetText(id)
-				view.Layout.ShowPage("renameModal")
-				app.SetFocus(renameInput)
+				stringModal(app, view.Layout, "Rename Replay", id, func(s string) {
+					if r, ok := view.entries[id]; ok {
+						view.RenameItem(r, s)
+						id = r.ID
+					}
+				})
 			}
 
 		case tcell.KeyCtrlR:
 			if req, ok := view.entries[id]; ok {
 				view.AddItem(req)
 			}
-
 		}
 		return event
 	})
-
-	renameModal := tview.NewFlex().AddItem(renameInput, 0, 1, true)
-
-	renameButton := tview.NewButton("OK").SetSelectedFunc(func() {
-		if _, ok := view.entries[renameInput.GetText()]; ok {
-			if id == renameInput.GetText() {
-				renameModal.SetTitle("Rename Item")
-				view.Layout.HidePage("renameModal")
-				return
-			}
-			renameModal.SetTitle(renameInput.GetText() + " Already Exists!")
-			return
-		}
-		if r, ok := view.entries[id]; ok {
-			view.RenameItem(r, renameInput.GetText())
-			id = r.ID
-		}
-
-		view.refreshReplay(view.entries[id])
-		renameModal.SetTitle("Rename Item")
-		view.Layout.HidePage("renameModal")
-	})
-
-	renameModal.SetBorder(true)
-	renameModal.SetDirection(tview.FlexRow)
-	renameModal.SetTitle("Rename Item")
-	renameModal.AddItem(renameButton, 0, 1, false)
-	renameModal.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyTab {
-			if renameInput == app.GetFocus() {
-				app.SetFocus(renameButton)
-			} else {
-				app.SetFocus(renameInput)
-			}
-		}
-
-		return event
-	})
-
-	view.Layout.AddPage("renameModal", newmodal(renameModal, 40, 5), true, false)
 
 }
 

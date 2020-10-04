@@ -28,14 +28,9 @@ func (view *SaveRestoreView) GetView() (title string, content tview.Primitive) {
 }
 
 // Init - Initialize the save view
-func (view *SaveRestoreView) Init(replays *ReplayView, proxy *ProxyView) {
+func (view *SaveRestoreView) Init(app *tview.Application, replays *ReplayView, proxy *ProxyView) {
 	view.Layout = tview.NewPages()
-
-	modal := tview.NewModal().
-		SetText("Done!").
-		AddButtons([]string{"Ok"}).SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-		view.Layout.HidePage("modal")
-	})
+	var msg string
 
 	form := tview.NewForm()
 	form.SetBorder(true).SetTitle("Save/Load").SetTitleAlign(tview.AlignLeft)
@@ -48,28 +43,27 @@ func (view *SaveRestoreView) Init(replays *ReplayView, proxy *ProxyView) {
 		_, err := os.Stat(filename.GetText())
 		if os.IsNotExist(err) { // need to check if dir
 			if Save(filename.GetText(), replays, proxy) {
-				modal.SetText("Saved")
+				msg = "Save Complete"
 			} else {
-				modal.SetText("Save Failed")
+				msg = "Save Failed"
 			}
 
 		} else {
-			modal.SetText("File exists")
+			msg = "File Exists"
 		}
 
-		view.Layout.ShowPage("modal")
+		notifModal(app, view.Layout, msg)
 
 	}).AddButton("Load", func() {
 		if Load(filename.GetText(), replays, proxy) {
-			modal.SetText("Loaded")
+			msg = "Loaded"
 		} else {
-			modal.SetText("Load failed")
+			msg = "Load failed"
 		}
-		view.Layout.ShowPage("modal")
+		notifModal(app, view.Layout, msg)
 	})
 
-	view.Layout.AddPage("form", form, true, true).
-		AddPage("modal", modal, false, false)
+	view.Layout.AddPage("form", form, true, true)
 }
 
 // Save - spool the replay and proxy state off to a file
