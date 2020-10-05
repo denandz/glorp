@@ -131,8 +131,6 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView) {
 		id = view.Table.GetCell(row, 1).Text
 		if entry := view.Logger.GetEntry(id); entry != nil {
 			if entry.Request != nil {
-				fmt.Fprint(view.requestBox, string(entry.Request.Raw))
-
 				// Appending a UTF8 braille pattern blank (U+2800)
 				// to deal with the partial-trailing-utf8-rune logic
 				// in tview (textview.go)
@@ -344,8 +342,8 @@ func (view *ProxyView) writeRequest(r *modifier.Request) {
 		return
 	}
 
-	fmt.Fprint(view.responseBox, string(body)) //string(r.Raw))
-	fmt.Fprint(view.responseBox, "\u2800")
+	fmt.Fprint(view.requestBox, string(body))
+	fmt.Fprint(view.requestBox, "\u2800")
 }
 
 func (view *ProxyView) writeResponse(r *modifier.Response) {
@@ -375,6 +373,6 @@ func (view *ProxyView) writeResponse(r *modifier.Response) {
 		return
 	}
 
-	fmt.Fprint(view.responseBox, string(body)) //string(r.Raw))
+	fmt.Fprint(view.responseBox, string(body))
 	fmt.Fprint(view.responseBox, "\u2800")
 }
