@@ -142,10 +142,12 @@ func (view *ReplayView) Init(app *tview.Application) {
 					responseMeta.SetCell(0, 1, tview.NewTableCell(strconv.Itoa(len(req.RawResponse))))
 					responseMeta.SetCell(0, 3, tview.NewTableCell(req.ResponseTime))
 				} else {
-					responseMeta.SetCell(0, 1, tview.NewTableCell("ERROR"))
-					responseMeta.SetCell(0, 3, tview.NewTableCell("ERROR"))
-					view.response.Clear()
-					fmt.Fprint(view.response, err)
+					if req == view.entries[id] {
+						responseMeta.SetCell(0, 1, tview.NewTableCell("ERROR"))
+						responseMeta.SetCell(0, 3, tview.NewTableCell("ERROR"))
+						view.response.Clear()
+						fmt.Fprint(view.response, err)
+					}
 				}
 				app.Draw()
 				c = true
