@@ -336,6 +336,12 @@ func (view *ReplayView) Init(app *tview.Application) {
 			if req, ok := view.entries[id]; ok {
 				view.AddItem(req)
 			}
+
+		case tcell.KeyCtrlB:
+			replayData := &replay.Request{}
+			replayData.ID = "new"
+			view.AddItem(replayData)
+
 		}
 		return event
 	})
