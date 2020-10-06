@@ -24,14 +24,14 @@ type Request struct {
 
 // SendRequest - takes a destination host, port and ssl boolean. Fires the request and writes the
 // response into an array
-func (r *Request) SendRequest() (bool, error) {
+func (r *Request) SendRequest() (int, error) {
 	var buf bytes.Buffer
 	log.Printf("[+] Replay - SendRequest Host: %s Port: %s TLS:  %t\n", r.Host, r.Port, r.TLS)
 
 	port, err := strconv.Atoi(r.Port)
 	if err != nil {
 		log.Printf("[!] Replay - Error in port atoi: %s\n", err)
-		return false, err
+		return 0, err
 	}
 
 	start := time.Now()
@@ -41,16 +41,14 @@ func (r *Request) SendRequest() (bool, error) {
 		buf, err = sendTLS(r.Host, port, r.RawRequest)
 	}
 
-	if err != nil {
-		return false, err
-	}
+	size := buf.Len()
 
-	if buf.Len() > 0 {
+	if size > 0 {
 		r.RawResponse = buf.Bytes()
 		r.ResponseTime = time.Since(start).String()
 	}
 
-	return true, nil
+	return size, err
 }
 
 // UpdateContentLength - try and update the content length in a raw request to match the body length
@@ -91,14 +89,16 @@ func (r *Request) UpdateContentLength() {
 
 func sendTCP(host string, port int, packet []byte) (bytes.Buffer, error) {
 	var buf bytes.Buffer
-	var err error
 	var conn net.Conn
 
 	addr := strings.Join([]string{host, strconv.Itoa(port)}, ":")
-	if conn, err = net.DialTimeout("tcp", addr, 30*time.Second); err != nil {
+	conn, err := net.DialTimeout("tcp", addr, 30*time.Second)
+
+	if err != nil {
 		log.Printf("[!] Replay sendTCP: %s\n", err)
 		return buf, err
 	}
+
 	if conn.SetReadDeadline(time.Now().Add(30*time.Second)) != nil {
 		log.Printf("[!] Replay sendTCP: %s\n", err)
 		return buf, err
@@ -126,7 +126,6 @@ func sendTCP(host string, port int, packet []byte) (bytes.Buffer, error) {
 
 func sendTLS(host string, port int, packet []byte) (bytes.Buffer, error) {
 	var buf bytes.Buffer
-	var err error
 	var conn net.Conn
 
 	conf := &tls.Config{
@@ -135,7 +134,9 @@ func sendTLS(host string, port int, packet []byte) (bytes.Buffer, error) {
 	}
 
 	addr := strings.Join([]string{host, strconv.Itoa(port)}, ":")
-	if conn, err = net.DialTimeout("tcp", addr, 30*time.Second); err != nil {
+	conn, err := net.DialTimeout("tcp", addr, 30*time.Second)
+
+	if err != nil {
 		log.Printf("[!] Replay sendTLS: %s\n", err)
 		return buf, err
 	}

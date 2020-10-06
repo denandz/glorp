@@ -137,19 +137,20 @@ func (view *ReplayView) Init(app *tview.Application) {
 			c := false
 
 			go func() {
-				if ok, err := req.SendRequest(); ok {
-					view.refreshReplay(req)
-					responseMeta.SetCell(0, 1, tview.NewTableCell(strconv.Itoa(len(req.RawResponse))))
-					responseMeta.SetCell(0, 3, tview.NewTableCell(req.ResponseTime))
-				} else {
-					if req == view.entries[id] {
+				size, err := req.SendRequest()
+				if req == view.entries[id] {
+					if size > 0 {
+						view.refreshReplay(req)
+						responseMeta.SetCell(0, 1, tview.NewTableCell(strconv.Itoa(len(req.RawResponse))))
+						responseMeta.SetCell(0, 3, tview.NewTableCell(req.ResponseTime))
+					} else {
 						responseMeta.SetCell(0, 1, tview.NewTableCell("ERROR"))
 						responseMeta.SetCell(0, 3, tview.NewTableCell("ERROR"))
 						view.response.Clear()
 						fmt.Fprint(view.response, err)
 					}
+					app.Draw()
 				}
-				app.Draw()
 				c = true
 			}()
 
