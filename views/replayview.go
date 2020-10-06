@@ -16,10 +16,11 @@ import (
 
 // ReplayView - struct that holds the main replayview elements
 type ReplayView struct {
-	Layout   *tview.Pages    // The main replay view, all others should be underneath Layout
-	Table    *tview.Table    // the main table that lists all the replay items
-	request  *tview.TextView // http request box
-	response *tview.TextView // http response box
+	Layout       *tview.Pages    // The main replay view, all others should be underneath Layout
+	Table        *tview.Table    // the main table that lists all the replay items
+	request      *tview.TextView // http request box
+	response     *tview.TextView // http response box
+	responseMeta *tview.Table    // metadata for size recieved and time taken
 
 	host                *tview.InputField // host field input
 	port                *tview.InputField // port input
@@ -81,9 +82,9 @@ func (view *ReplayView) GetView() (title string, content tview.Primitive) {
 func (view *ReplayView) Init(app *tview.Application) {
 	view.entries = make(map[string]*replay.Request)
 	var id string // the currently selected replay item
-	responseMeta := tview.NewTable()
-	responseMeta.SetCell(0, 0, tview.NewTableCell("Size:").SetTextColor(tcell.ColorMediumPurple))
-	responseMeta.SetCell(0, 2, tview.NewTableCell("Time:").SetTextColor(tcell.ColorMediumPurple))
+	view.responseMeta = tview.NewTable()
+	view.responseMeta.SetCell(0, 0, tview.NewTableCell("Size:").SetTextColor(tcell.ColorMediumPurple))
+	view.responseMeta.SetCell(0, 2, tview.NewTableCell("Time:").SetTextColor(tcell.ColorMediumPurple))
 
 	//view.Layout = tview.NewFlex()
 	view.Layout = tview.NewPages()
@@ -141,11 +142,9 @@ func (view *ReplayView) Init(app *tview.Application) {
 				if req == view.entries[id] {
 					if size > 0 {
 						view.refreshReplay(req)
-						responseMeta.SetCell(0, 1, tview.NewTableCell(strconv.Itoa(len(req.RawResponse))))
-						responseMeta.SetCell(0, 3, tview.NewTableCell(req.ResponseTime))
 					} else {
-						responseMeta.SetCell(0, 1, tview.NewTableCell("ERROR"))
-						responseMeta.SetCell(0, 3, tview.NewTableCell("ERROR"))
+						view.responseMeta.SetCell(0, 1, tview.NewTableCell("ERROR"))
+						view.responseMeta.SetCell(0, 3, tview.NewTableCell("ERROR"))
 						view.response.Clear()
 						fmt.Fprint(view.response, err)
 					}
@@ -287,7 +286,7 @@ func (view *ReplayView) Init(app *tview.Application) {
 
 	responseFlexView := tview.NewFlex()
 	responseFlexView.SetDirection(tview.FlexRow)
-	responseFlexView.AddItem(responseMeta, 2, 1, false)
+	responseFlexView.AddItem(view.responseMeta, 2, 1, false)
 	responseFlexView.AddItem(view.response, 0, 8, false)
 
 	replayFlexView.AddItem(view.Table, 25, 4, true)
@@ -370,4 +369,7 @@ func (view *ReplayView) refreshReplay(r *replay.Request) {
 	fmt.Fprint(view.response, "\u2800")
 
 	view.response.ScrollToBeginning()
+
+	view.responseMeta.SetCell(0, 1, tview.NewTableCell(strconv.Itoa(len(r.RawResponse))))
+	view.responseMeta.SetCell(0, 3, tview.NewTableCell(r.ResponseTime))
 }
