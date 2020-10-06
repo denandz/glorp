@@ -100,8 +100,7 @@ func (view *ReplayView) Init(app *tview.Application) {
 	view.host = tview.NewInputField()
 	view.host.SetLabelColor(tcell.ColorMediumPurple)
 	view.host.SetLabel("Host ")
-	view.host.SetDoneFunc(func(key tcell.Key) {
-		text := view.host.GetText()
+	view.host.SetChangedFunc(func(text string) {
 		if req, ok := view.entries[id]; ok {
 			req.Host = text
 		}
@@ -110,8 +109,7 @@ func (view *ReplayView) Init(app *tview.Application) {
 	view.port = tview.NewInputField()
 	view.port.SetLabel("Port ").SetAcceptanceFunc(tview.InputFieldInteger)
 	view.port.SetLabelColor(tcell.ColorMediumPurple)
-	view.port.SetDoneFunc(func(key tcell.Key) {
-		text := view.port.GetText()
+	view.port.SetChangedFunc(func(text string) {
 		if req, ok := view.entries[id]; ok {
 			req.Port = text
 		}
@@ -139,10 +137,16 @@ func (view *ReplayView) Init(app *tview.Application) {
 			c := false
 
 			go func() {
-				req.SendRequest()
-				view.refreshReplay(req)
-				responseMeta.SetCell(0, 1, tview.NewTableCell(strconv.Itoa(len(req.RawResponse))))
-				responseMeta.SetCell(0, 3, tview.NewTableCell(req.ResponseTime))
+				if ok, err := req.SendRequest(); ok {
+					view.refreshReplay(req)
+					responseMeta.SetCell(0, 1, tview.NewTableCell(strconv.Itoa(len(req.RawResponse))))
+					responseMeta.SetCell(0, 3, tview.NewTableCell(req.ResponseTime))
+				} else {
+					responseMeta.SetCell(0, 1, tview.NewTableCell("ERROR"))
+					responseMeta.SetCell(0, 3, tview.NewTableCell("ERROR"))
+					view.response.Clear()
+					fmt.Fprint(view.response, err)
+				}
 				app.Draw()
 				c = true
 			}()

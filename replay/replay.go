@@ -36,9 +36,13 @@ func (r *Request) SendRequest() (bool, error) {
 
 	start := time.Now()
 	if !r.TLS {
-		buf = sendTCP(r.Host, port, r.RawRequest)
+		buf, err = sendTCP(r.Host, port, r.RawRequest)
 	} else {
-		buf = sendTLS(r.Host, port, r.RawRequest)
+		buf, err = sendTLS(r.Host, port, r.RawRequest)
+	}
+
+	if err != nil {
+		return false, err
 	}
 
 	if buf.Len() > 0 {
@@ -85,55 +89,81 @@ func (r *Request) UpdateContentLength() {
 	}
 }
 
-func sendTCP(host string, port int, packet []byte) bytes.Buffer {
+func sendTCP(host string, port int, packet []byte) (bytes.Buffer, error) {
 	var buf bytes.Buffer
+	var err error
+	var conn net.Conn
 
 	addr := strings.Join([]string{host, strconv.Itoa(port)}, ":")
-	conn, err := net.Dial("tcp", addr)
-
-	if err != nil {
-		log.Println(err)
-		return buf
+	if conn, err = net.DialTimeout("tcp", addr, 30*time.Second); err != nil {
+		log.Printf("[!] Replay sendTCP: %s\n", err)
+		return buf, err
+	}
+	if conn.SetReadDeadline(time.Now().Add(30*time.Second)) != nil {
+		log.Printf("[!] Replay sendTCP: %s\n", err)
+		return buf, err
 	}
 	defer conn.Close()
 
 	l, err := conn.Write(packet)
 	if err != nil {
-		log.Println(err)
-		return buf
+		log.Printf("[!] Replay sendTCP: %s\n", err)
+		return buf, err
 	}
 
 	log.Printf("[+] Replay - sendTCP - Sent: %d\n", l)
 
-	io.Copy(&buf, conn)
+	_, err = io.Copy(&buf, conn)
+	if err != nil {
+		log.Printf("[!] Replay sendTCP: %s\n", err)
+		return buf, err
+	}
+
 	log.Printf("[+] Replay - sendTCP - Received: %d", buf.Len())
 
-	return buf
+	return buf, nil
 }
 
-func sendTLS(host string, port int, packet []byte) bytes.Buffer {
+func sendTLS(host string, port int, packet []byte) (bytes.Buffer, error) {
 	var buf bytes.Buffer
+	var err error
+	var conn net.Conn
+
+	conf := &tls.Config{
+		// No certificate verification
+		InsecureSkipVerify: true,
+	}
 
 	addr := strings.Join([]string{host, strconv.Itoa(port)}, ":")
-	conn, err := tls.Dial("tcp", addr, nil)
-
-	if err != nil {
-		log.Println(err)
-		return buf
+	if conn, err = net.DialTimeout("tcp", addr, 30*time.Second); err != nil {
+		log.Printf("[!] Replay sendTLS: %s\n", err)
+		return buf, err
 	}
 
 	defer conn.Close()
 
-	l, err := conn.Write(packet)
+	tlsConn := tls.Client(conn, conf)
+	if err = tlsConn.Handshake(); err != nil {
+		log.Printf("[!] Replay sendTLS: %s\n", err)
+		return buf, err
+	}
+
+	if tlsConn.SetReadDeadline(time.Now().Add(30*time.Second)) != nil {
+		log.Printf("[!] Replay sendTLS: %s\n", err)
+		return buf, err
+	}
+	defer tlsConn.Close()
+
+	l, err := tlsConn.Write(packet)
 	if err != nil {
-		log.Println(err)
-		return buf
+		log.Printf("[!] Replay sendTLS: %s\n", err)
+		return buf, err
 	}
 
 	log.Printf("[+] Replay - sendTLS - Sent: %d\n", l)
 
-	io.Copy(&buf, conn)
+	io.Copy(&buf, tlsConn)
 	log.Printf("[+] Replay - sendTLS - Received: %d\n", buf.Len())
 
-	return buf
+	return buf, nil
 }
