@@ -3,7 +3,7 @@ package proxy
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"glorp/modifier"
+	"github.com/denandz/glorp/modifier"
 	"log"
 	"net"
 	"net/http"

@@ -1,4 +1,4 @@
-module glorp
+module github.com/denandz/glorp
 
 go 1.15
 

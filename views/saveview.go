@@ -2,8 +2,8 @@ package views
 
 import (
 	"encoding/json"
-	"glorp/modifier"
-	"glorp/replay"
+	"github.com/denandz/glorp/modifier"
+	"github.com/denandz/glorp/replay"
 	"io/ioutil"
 	"log"
 	"os"
