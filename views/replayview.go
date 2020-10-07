@@ -2,7 +2,7 @@ package views
 
 import (
 	"fmt"
-	"glorp/replay"
+	"github.com/denandz/glorp/replay"
 	"io/ioutil"
 	"log"
 	"os"

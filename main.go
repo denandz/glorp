@@ -5,8 +5,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"glorp/proxy"
-	"glorp/views"
+	"github.com/denandz/glorp/proxy"
+	"github.com/denandz/glorp/views"
 	"log"
 	"os"
 	"strconv"
