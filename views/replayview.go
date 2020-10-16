@@ -2,13 +2,14 @@ package views
 
 import (
 	"fmt"
-	"github.com/denandz/glorp/replay"
 	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
 	"strconv"
 	"time"
+
+	"github.com/denandz/glorp/replay"
 
 	"github.com/gdamore/tcell"
 	"github.com/rivo/tview"
@@ -237,7 +238,12 @@ func (view *ReplayView) Init(app *tview.Application) {
 
 				app.EnableMouse(true)
 			}
+		} else if event.Key() == tcell.KeyCtrlS {
+			if req, ok := view.entries[id]; ok {
+				saveModal(app, view.Layout, req.RawRequest)
+			}
 		}
+
 		return event
 	})
 
@@ -267,7 +273,12 @@ func (view *ReplayView) Init(app *tview.Application) {
 
 				app.EnableMouse(true)
 			}
+		} else if event.Key() == tcell.KeyCtrlS {
+			if req, ok := view.entries[id]; ok {
+				saveModal(app, view.Layout, req.RawResponse)
+			}
 		}
+
 		return event
 	})
 

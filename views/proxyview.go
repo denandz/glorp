@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/denandz/glorp/modifier"
-	"github.com/denandz/glorp/replay"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -13,6 +11,9 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+
+	"github.com/denandz/glorp/modifier"
+	"github.com/denandz/glorp/replay"
 
 	"github.com/gdamore/tcell"
 	"github.com/google/martian/messageview"
@@ -64,11 +65,24 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView) {
 	view.requestBox.SetBorder(true)
 	view.requestBox.SetTitle("Request")
 	view.requestBox.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlS {
+			if entry := view.Logger.GetEntry(id); entry != nil {
+				saveModal(app, view.Layout, entry.Request.Raw)
+			}
+		}
 		return event
 	})
 	view.responseBox = tview.NewTextView().SetWrap(false).SetDynamicColors(true)
 	view.responseBox.SetBorder(true)
 	view.responseBox.SetTitle("Response")
+	view.responseBox.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlS {
+			if entry := view.Logger.GetEntry(id); entry != nil {
+				saveModal(app, view.Layout, entry.Response.Raw)
+			}
+		}
+		return event
+	})
 
 	reqRespFlexView.AddItem(view.requestBox, 0, 1, false)
 	reqRespFlexView.AddItem(view.responseBox, 0, 1, false)
@@ -226,21 +240,6 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView) {
 			}
 
 			app.SetFocus(items[0])
-		}
-		if event.Key() == tcell.KeyCtrlS {
-			focus := app.GetFocus()
-			if focus == view.requestBox || focus == view.responseBox {
-				if entry := view.Logger.GetEntry(id); entry != nil {
-					if focus == view.responseBox {
-						saveBuffer = entry.Response.Raw
-					} else {
-						saveBuffer = entry.Request.Raw
-					}
-
-					view.Layout.ShowPage("saveModal")
-					app.SetFocus(filenameInput)
-				}
-			}
 		}
 
 		return event
