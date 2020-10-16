@@ -79,7 +79,7 @@ ctrl-c | All | Exit Glorp
 ctrl-n | All | Go the next page
 ctrl-p | All | Go to the previous page
 ctrl-r | Proxy/Replay | Send item to the replayer
-ctrl-s | Proxy - highlighted request/response | Save item to file
+ctrl-s | Proxy/Replay - highlighted request/response | Save item to file
 ctrl-b | Replay | Create a new blank replay item - useful for assembling requests from scratch
 ctrl-e | Replay - highlighted request/response | Edit request in `vi`, responses will open with `view`
 ctrl-x | Replay | Rename replay item
