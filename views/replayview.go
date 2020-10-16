@@ -44,6 +44,7 @@ func (view *ReplayView) AddItem(r *replay.Request) {
 	}
 	log.Printf("[+] ReplayView - AddItem - Adding replay item with ID: %s\n", newID)
 	view.entries[newID] = r
+	r.ID = newID
 
 	rows := view.Table.GetRowCount()
 	view.Table.SetCell(rows, 0, tview.NewTableCell(newID))
