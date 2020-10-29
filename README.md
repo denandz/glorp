@@ -45,7 +45,7 @@ Generating RSA private key, 2048 bit long modulus (2 primes)
 .....................+++++
 ...+++++
 e is 65537 (0x010001)
-doi@buzdovan:~/go/src/glorp$ openssl req -new -x509 -key ca.key -out ca.crt
+doi@buzdovan:~/go/src/glorp$ openssl req -x509 -new -nodes -key ca.key -sha256 -days 1825 -out ca.crt
 You are about to be asked to enter information that will be incorporated
 into your certificate request.
 What you are about to enter is what is called a Distinguished Name or a DN.
