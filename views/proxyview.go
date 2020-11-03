@@ -15,7 +15,7 @@ import (
 	"github.com/denandz/glorp/modifier"
 	"github.com/denandz/glorp/replay"
 
-	"github.com/gdamore/tcell"
+	"github.com/gdamore/tcell/v2"
 	"github.com/google/martian/messageview"
 	"github.com/rivo/tview"
 )

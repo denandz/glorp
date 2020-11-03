@@ -2,13 +2,14 @@ package views
 
 import (
 	"encoding/json"
-	"github.com/denandz/glorp/modifier"
-	"github.com/denandz/glorp/replay"
 	"io/ioutil"
 	"log"
 	"os"
 
-	"github.com/gdamore/tcell"
+	"github.com/denandz/glorp/modifier"
+	"github.com/denandz/glorp/replay"
+
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 

@@ -5,13 +5,14 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/denandz/glorp/proxy"
-	"github.com/denandz/glorp/views"
 	"log"
 	"os"
 	"strconv"
 
-	"github.com/gdamore/tcell"
+	"github.com/denandz/glorp/proxy"
+	"github.com/denandz/glorp/views"
+
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 

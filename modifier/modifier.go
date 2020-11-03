@@ -238,23 +238,30 @@ func (l *Logger) AddEntry(e Entry) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	l.entries[e.ID] = &e
+	if e.ID != "" {
 
-	n := l.table.GetRowCount()
+		l.entries[e.ID] = &e
+		n := l.table.GetRowCount()
+		l.table.SetCell(n, 1, tview.NewTableCell(e.ID))
+		l.table.SetCell(n, 6, tview.NewTableCell(e.StartedDateTime.Format("02-01-2006 15:04:05")).SetAlign(tview.AlignRight))
 
-	url := e.Request.URL
+		if e.Request != nil {
+			url := e.Request.URL
 
-	if len(url) > 100 {
-		url = string([]rune(e.Request.URL)[0:100])
+			if len(url) > 100 {
+				url = string([]rune(e.Request.URL)[0:100])
+				l.table.SetCell(n, 2, tview.NewTableCell(url).SetExpansion(1))
+				l.table.SetCell(n, 7, tview.NewTableCell(e.Request.Method))
+			}
+		}
+
+		if e.Response != nil {
+
+			l.table.SetCell(n, 3, tview.NewTableCell(strconv.Itoa(e.Response.Status)))
+			l.table.SetCell(n, 4, tview.NewTableCell(strconv.Itoa(len(e.Response.Raw))))
+			l.table.SetCell(n, 5, tview.NewTableCell(strconv.FormatInt(e.Time, 10)))
+		}
 	}
-
-	l.table.SetCell(n, 1, tview.NewTableCell(e.ID))
-	l.table.SetCell(n, 2, tview.NewTableCell(url).SetExpansion(1))
-	l.table.SetCell(n, 3, tview.NewTableCell(strconv.Itoa(e.Response.Status)))
-	l.table.SetCell(n, 4, tview.NewTableCell(strconv.Itoa(len(e.Response.Raw))))
-	l.table.SetCell(n, 5, tview.NewTableCell(strconv.FormatInt(e.Time, 10)))
-	l.table.SetCell(n, 6, tview.NewTableCell(e.StartedDateTime.Format("02-01-2006 15:04:05")).SetAlign(tview.AlignRight))
-	l.table.SetCell(n, 7, tview.NewTableCell(e.Request.Method))
 }
 
 // Reset clears the in-memory log of entries.
