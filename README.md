@@ -148,7 +148,7 @@ iptables -t nat -A POSTROUTING -o enp1s0 -j MASQUERADE
 Squid can be built with the following dockerfile:
 
 ```
-# docker run --net=host -it --rm -v /etc/squid:/etc/squid sq1 /usr/local/squid/sbin/squid -N -f /etc/squid/squid.conf
+# docker run --net=host -it --rm -v $PWD:/etc/squid sq1 /usr/local/squid/sbin/squid -N -f /etc/squid/squid.conf
 # Net host saves some docker iptables headaches, should probably document how to do that properly...
 FROM debian:latest
 
