@@ -250,9 +250,10 @@ func (l *Logger) AddEntry(e Entry) {
 
 			if len(url) > 100 {
 				url = string([]rune(e.Request.URL)[0:100])
-				l.table.SetCell(n, 2, tview.NewTableCell(url).SetExpansion(1))
-				l.table.SetCell(n, 7, tview.NewTableCell(e.Request.Method))
 			}
+			
+			l.table.SetCell(n, 2, tview.NewTableCell(url).SetExpansion(1))
+			l.table.SetCell(n, 7, tview.NewTableCell(e.Request.Method))
 		}
 
 		if e.Response != nil {
