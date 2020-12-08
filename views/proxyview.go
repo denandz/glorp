@@ -174,7 +174,8 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView) {
 
 	// input captures
 	view.Table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyCtrlR {
+		switch event.Key() {
+		case tcell.KeyCtrlR:
 			if entry := view.Logger.GetEntry(id); entry != nil {
 				replayData := &replay.Request{}
 
@@ -221,6 +222,12 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView) {
 
 				replayview.AddItem(replayData)
 			}
+
+		case tcell.KeyPgUp:
+			view.Table.ScrollToBeginning()
+
+		case tcell.KeyPgDn:
+			view.Table.ScrollToEnd()
 		}
 
 		return event
@@ -269,55 +276,26 @@ func (view *ProxyView) createProxy(app *tview.Application) {
 	go func() {
 		for elem := range view.proxychan {
 			if view.Table != nil && app != nil {
-				n := view.Table.GetRowCount()
 				entry := view.Logger.GetEntry(elem.ID)
 				if entry != nil {
-					url := entry.Request.URL
+					n := view.Table.GetRowCount()
+					view.AddEntry(entry, elem.NotifType)
 
-					if len(url) > 100 {
-						url = string([]rune(entry.Request.URL)[0:100])
+					// if the table is focused, and the cursor is on the last entry, then update it to the new entry
+					if app.GetFocus() == view.Table {
+						if r, _ := view.Table.GetSelection(); r == n-1 {
+							if elem.NotifType == 0 {
+								view.Table.Select(n, 0)
+							} else {
+								view.Table.Select(n-1, 0)
+							}
+						}
 					}
 
-					if view.proxyfilter(url) {
-
-						if elem.NotifType == 0 { // request
-
-							view.Table.SetCell(n, 1, tview.NewTableCell(elem.ID))
-							view.Table.SetCell(n, 2, tview.NewTableCell(url).SetExpansion(1))
-							view.Table.SetCell(n, 6, tview.NewTableCell(""))
-							view.Table.SetCell(n, 7, tview.NewTableCell(entry.Request.Method))
-
-							// if the table is focused, and the cursor is on the last entry, then update it to the new entry
-							if app.GetFocus() == view.Table {
-								if r, _ := view.Table.GetSelection(); r == n-1 {
-									view.Table.Select(n, 0)
-								}
-							}
-
-						} else if elem.NotifType == 1 {
-							// find the table row with the corresponding request. I expect responses to arrive relatively soon after the request
-							// is sent, so using a reverse-search here
-							for i := n; i > 0; i-- {
-								if i < n && view.Table.GetCell(i, 1).Text == elem.ID {
-									view.Table.SetCell(i, 3, tview.NewTableCell(strconv.Itoa(entry.Response.Status)))
-									view.Table.SetCell(i, 4, tview.NewTableCell(strconv.Itoa(len(entry.Response.Raw))))
-									view.Table.SetCell(i, 5, tview.NewTableCell(strconv.FormatInt(entry.Time, 10)))
-									view.Table.SetCell(i, 6, tview.NewTableCell(entry.StartedDateTime.Format("02-01-2006 15:04:05")).SetAlign(tview.AlignRight))
-
-									if app.GetFocus() == view.Table {
-										if r, _ := view.Table.GetSelection(); r == i {
-											view.Table.Select(i, 0)
-										}
-									}
-								}
-							}
-						}
-
-						// redraw when adding, if the proxy view is in focus right now
-						focus := app.GetFocus()
-						if focus == view.Table || focus == view.requestBox || focus == view.responseBox {
-							app.Draw()
-						}
+					// redraw when adding, if the proxy view is in focus right now
+					focus := app.GetFocus()
+					if focus == view.Table || focus == view.requestBox || focus == view.responseBox {
+						app.Draw()
 					}
 				}
 			}
@@ -325,6 +303,39 @@ func (view *ProxyView) createProxy(app *tview.Application) {
 	}()
 
 	view.Logger = modifier.NewLogger(app, view.proxychan, view.Table)
+}
+
+// AddEntry - add a modifier entry to the proxy table, t indicates request or response
+func (view *ProxyView) AddEntry(e *modifier.Entry, t int) {
+	n := view.Table.GetRowCount()
+	url := e.Request.URL
+
+	if len(url) > 100 {
+		url = string([]rune(e.Request.URL)[0:100])
+	}
+
+	if view.proxyfilter(url) {
+
+		if t == 0 { // request
+
+			view.Table.SetCell(n, 1, tview.NewTableCell(e.ID))
+			view.Table.SetCell(n, 2, tview.NewTableCell(url).SetExpansion(1))
+			view.Table.SetCell(n, 6, tview.NewTableCell(""))
+			view.Table.SetCell(n, 7, tview.NewTableCell(e.Request.Method))
+
+		} else if t == 1 {
+			// find the table row with the corresponding request. I expect responses to arrive relatively soon after the request
+			// is sent, so using a reverse-search here
+			for i := n; i > 0; i-- {
+				if i < n && view.Table.GetCell(i, 1).Text == e.ID {
+					view.Table.SetCell(i, 3, tview.NewTableCell(strconv.Itoa(e.Response.Status)))
+					view.Table.SetCell(i, 4, tview.NewTableCell(strconv.Itoa(len(e.Response.Raw))))
+					view.Table.SetCell(i, 5, tview.NewTableCell(strconv.FormatInt(e.Time, 10)))
+					view.Table.SetCell(i, 6, tview.NewTableCell(e.StartedDateTime.Format("02-01-2006 15:04:05")).SetAlign(tview.AlignRight))
+				}
+			}
+		}
+	}
 }
 
 // proxyfilter should take a URL, evaluate the filters and return true if the proxy entry should be displayed
