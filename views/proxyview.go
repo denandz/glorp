@@ -10,6 +10,8 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"regexp"
+	"sort"
 	"strconv"
 	"sync"
 
@@ -223,10 +225,21 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView) {
 				replayview.AddItem(replayData)
 			}
 
-		case tcell.KeyPgUp:
+		}
+
+		switch event.Rune() {
+		case '/':
+			stringModal(app, view.Layout, "Set URL Display Filter", view.filter.condition, func(filter string) {
+				view.filter.mutex.Lock()
+				view.filter.condition = filter
+				view.filter.mutex.Unlock()
+
+				view.reloadtable()
+			})
+		case 'g':
 			view.Table.ScrollToBeginning()
 
-		case tcell.KeyPgDn:
+		case 'G':
 			view.Table.ScrollToEnd()
 		}
 
@@ -276,13 +289,15 @@ func (view *ProxyView) createProxy(app *tview.Application) {
 	go func() {
 		for elem := range view.proxychan {
 			if view.Table != nil && app != nil {
+				log.Println("FOOOO: " + elem.ID)
+
 				entry := view.Logger.GetEntry(elem.ID)
 				if entry != nil {
 					n := view.Table.GetRowCount()
 					view.AddEntry(entry, elem.NotifType)
 
 					// if the table is focused, and the cursor is on the last entry, then update it to the new entry
-					if app.GetFocus() == view.Table {
+					if app.GetFocus() == view.Table && view.proxyfilter(entry.Request.URL) {
 						if r, _ := view.Table.GetSelection(); r == n-1 {
 							if elem.NotifType == 0 {
 								view.Table.Select(n, 0)
@@ -305,33 +320,48 @@ func (view *ProxyView) createProxy(app *tview.Application) {
 	view.Logger = modifier.NewLogger(app, view.proxychan, view.Table)
 }
 
-// AddEntry - add a modifier entry to the proxy table, t indicates request or response
+// AddEntry - add a modifier entry to the proxy table, t indicates request, response or save/load
 func (view *ProxyView) AddEntry(e *modifier.Entry, t int) {
 	n := view.Table.GetRowCount()
-	url := e.Request.URL
+	if e.Request != nil {
+		url := e.Request.URL
 
-	if len(url) > 100 {
-		url = string([]rune(e.Request.URL)[0:100])
-	}
+		if len(url) > 100 {
+			url = string([]rune(e.Request.URL)[0:100])
+		}
 
-	if view.proxyfilter(url) {
+		if view.proxyfilter(e.Request.URL) {
 
-		if t == 0 { // request
+			switch t {
+			case 0: // request
+				view.Table.SetCell(n, 1, tview.NewTableCell(e.ID))
+				view.Table.SetCell(n, 2, tview.NewTableCell(url).SetExpansion(1))
+				view.Table.SetCell(n, 6, tview.NewTableCell(""))
+				view.Table.SetCell(n, 7, tview.NewTableCell(e.Request.Method))
 
-			view.Table.SetCell(n, 1, tview.NewTableCell(e.ID))
-			view.Table.SetCell(n, 2, tview.NewTableCell(url).SetExpansion(1))
-			view.Table.SetCell(n, 6, tview.NewTableCell(""))
-			view.Table.SetCell(n, 7, tview.NewTableCell(e.Request.Method))
-
-		} else if t == 1 {
-			// find the table row with the corresponding request. I expect responses to arrive relatively soon after the request
-			// is sent, so using a reverse-search here
-			for i := n; i > 0; i-- {
-				if i < n && view.Table.GetCell(i, 1).Text == e.ID {
-					view.Table.SetCell(i, 3, tview.NewTableCell(strconv.Itoa(e.Response.Status)))
-					view.Table.SetCell(i, 4, tview.NewTableCell(strconv.Itoa(len(e.Response.Raw))))
-					view.Table.SetCell(i, 5, tview.NewTableCell(strconv.FormatInt(e.Time, 10)))
-					view.Table.SetCell(i, 6, tview.NewTableCell(e.StartedDateTime.Format("02-01-2006 15:04:05")).SetAlign(tview.AlignRight))
+			case 1: // response
+				// find the table row with the corresponding request. I expect responses to arrive relatively soon after the request
+				// is sent, so using a reverse-search here
+				if e.Response != nil {
+					for i := n; i > 0; i-- {
+						if i < n && view.Table.GetCell(i, 1).Text == e.ID {
+							view.Table.SetCell(i, 3, tview.NewTableCell(strconv.Itoa(e.Response.Status)))
+							view.Table.SetCell(i, 4, tview.NewTableCell(strconv.Itoa(len(e.Response.Raw))))
+							view.Table.SetCell(i, 5, tview.NewTableCell(strconv.FormatInt(e.Time, 10)))
+							view.Table.SetCell(i, 6, tview.NewTableCell(e.StartedDateTime.Format("02-01-2006 15:04:05")).SetAlign(tview.AlignRight))
+						}
+					}
+				}
+			case 2: // save/load
+				view.Table.SetCell(n, 1, tview.NewTableCell(e.ID))
+				view.Table.SetCell(n, 2, tview.NewTableCell(url).SetExpansion(1))
+				view.Table.SetCell(n, 6, tview.NewTableCell(""))
+				view.Table.SetCell(n, 7, tview.NewTableCell(e.Request.Method))
+				if e.Response != nil {
+					view.Table.SetCell(n, 3, tview.NewTableCell(strconv.Itoa(e.Response.Status)))
+					view.Table.SetCell(n, 4, tview.NewTableCell(strconv.Itoa(len(e.Response.Raw))))
+					view.Table.SetCell(n, 5, tview.NewTableCell(strconv.FormatInt(e.Time, 10)))
+					view.Table.SetCell(n, 6, tview.NewTableCell(e.StartedDateTime.Format("02-01-2006 15:04:05")).SetAlign(tview.AlignRight))
 				}
 			}
 		}
@@ -341,7 +371,43 @@ func (view *ProxyView) AddEntry(e *modifier.Entry, t int) {
 // proxyfilter should take a URL, evaluate the filters and return true if the proxy entry should be displayed
 // or false if the response entry should not be displayed
 func (view *ProxyView) proxyfilter(url string) bool {
-	return true
+	view.filter.mutex.Lock()
+	defer view.filter.mutex.Unlock()
+
+	match, err := regexp.MatchString(view.filter.condition, url)
+	if err != nil {
+		log.Printf("[!] Error proxyfilter %s\n", err)
+		return true // something went wrong, default to display
+	}
+
+	return match
+}
+
+// reloadtable clears the proxy table an redraws, happens when changing the filter regex
+func (view *ProxyView) reloadtable() {
+	view.Table.Clear()
+
+	view.Table.SetCell(0, 1, tview.NewTableCell("ID").SetTextColor(tcell.ColorMediumPurple).SetSelectable(false).SetAlign(tview.AlignCenter))
+	view.Table.SetCell(0, 2, tview.NewTableCell("URL").SetTextColor(tcell.ColorMediumPurple).SetSelectable(false).SetAlign(tview.AlignCenter))
+	view.Table.SetCell(0, 3, tview.NewTableCell("Status").SetTextColor(tcell.ColorMediumPurple).SetSelectable(false))
+	view.Table.SetCell(0, 4, tview.NewTableCell("Size").SetTextColor(tcell.ColorMediumPurple).SetSelectable(false))
+	view.Table.SetCell(0, 5, tview.NewTableCell("Time").SetTextColor(tcell.ColorMediumPurple).SetSelectable(false))
+	view.Table.SetCell(0, 6, tview.NewTableCell("Date").SetTextColor(tcell.ColorMediumPurple).SetSelectable(false))
+	view.Table.SetCell(0, 7, tview.NewTableCell("Method").SetTextColor(tcell.ColorMediumPurple).SetSelectable(false))
+
+	var proxyentries []*modifier.Entry
+	for _, value := range view.Logger.GetEntries() {
+		proxyentries = append(proxyentries, value)
+	}
+
+	// sort proxyentries by date
+	sort.Slice(proxyentries, func(i, j int) bool {
+		return proxyentries[i].StartedDateTime.Before(proxyentries[j].StartedDateTime)
+	})
+
+	for _, v := range proxyentries {
+		view.AddEntry(v, 2)
+	}
 }
 
 func (view *ProxyView) writeRequest(r *modifier.Request) {

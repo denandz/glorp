@@ -10,7 +10,6 @@ import (
 	"github.com/denandz/glorp/modifier"
 	"github.com/denandz/glorp/replay"
 
-	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
@@ -141,20 +140,13 @@ func Load(filename string, replays *ReplayView, prox *ProxyView) bool {
 		return false
 	}
 
-	prox.Table.Clear()
 	replays.Table.Clear()
 
-	prox.Table.SetCell(0, 1, tview.NewTableCell("ID").SetTextColor(tcell.ColorMediumPurple).SetSelectable(false).SetAlign(tview.AlignCenter))
-	prox.Table.SetCell(0, 2, tview.NewTableCell("URL").SetTextColor(tcell.ColorMediumPurple).SetSelectable(false).SetAlign(tview.AlignCenter))
-	prox.Table.SetCell(0, 3, tview.NewTableCell("Status").SetTextColor(tcell.ColorMediumPurple).SetSelectable(false))
-	prox.Table.SetCell(0, 4, tview.NewTableCell("Size").SetTextColor(tcell.ColorMediumPurple).SetSelectable(false))
-	prox.Table.SetCell(0, 5, tview.NewTableCell("Time").SetTextColor(tcell.ColorMediumPurple).SetSelectable(false))
-	prox.Table.SetCell(0, 6, tview.NewTableCell("Date").SetTextColor(tcell.ColorMediumPurple).SetSelectable(false))
-	prox.Table.SetCell(0, 7, tview.NewTableCell("Method").SetTextColor(tcell.ColorMediumPurple).SetSelectable(false))
-
+	prox.Logger.Reset()
 	for _, v := range s.Proxyentries {
 		prox.Logger.AddEntry(v)
 	}
+	prox.reloadtable()
 
 	for i := range s.Replays {
 		replays.AddItem(&s.Replays[i])

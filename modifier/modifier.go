@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httputil"
-	"strconv"
 	"sync"
 	"time"
 
@@ -25,7 +24,7 @@ type Logger struct {
 // Notification channel struct. Holds the element ID and an int for request or response
 type Notification struct {
 	ID        string
-	NotifType int // 0 == request, 1 == response
+	NotifType int // 0 == request, 1 == response, 2 == request and response (used by save/load)
 }
 
 // Entries stores all the Entry items
@@ -239,29 +238,7 @@ func (l *Logger) AddEntry(e Entry) {
 	defer l.mu.Unlock()
 
 	if e.ID != "" {
-
 		l.entries[e.ID] = &e
-		n := l.table.GetRowCount()
-		l.table.SetCell(n, 1, tview.NewTableCell(e.ID))
-		l.table.SetCell(n, 6, tview.NewTableCell(e.StartedDateTime.Format("02-01-2006 15:04:05")).SetAlign(tview.AlignRight))
-
-		if e.Request != nil {
-			url := e.Request.URL
-
-			if len(url) > 100 {
-				url = string([]rune(e.Request.URL)[0:100])
-			}
-			
-			l.table.SetCell(n, 2, tview.NewTableCell(url).SetExpansion(1))
-			l.table.SetCell(n, 7, tview.NewTableCell(e.Request.Method))
-		}
-
-		if e.Response != nil {
-
-			l.table.SetCell(n, 3, tview.NewTableCell(strconv.Itoa(e.Response.Status)))
-			l.table.SetCell(n, 4, tview.NewTableCell(strconv.Itoa(len(e.Response.Raw))))
-			l.table.SetCell(n, 5, tview.NewTableCell(strconv.FormatInt(e.Time, 10)))
-		}
 	}
 }
 
