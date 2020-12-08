@@ -348,7 +348,8 @@ func (view *ReplayView) Init(app *tview.Application) {
 
 		case tcell.KeyCtrlR:
 			if req, ok := view.entries[id]; ok {
-				view.AddItem(req)
+				replayEntry := req.Copy()
+				view.AddItem(&replayEntry)
 			}
 
 		case tcell.KeyCtrlB:

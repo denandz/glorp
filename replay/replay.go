@@ -87,6 +87,20 @@ func (r *Request) UpdateContentLength() {
 	}
 }
 
+// Copy - return a deep copy of a replay entry
+func (r *Request) Copy() Request {
+	replayData := Request{}
+
+	replayData = *r
+
+	replayData.RawRequest = make([]byte, len(r.RawRequest))
+	replayData.RawResponse = make([]byte, len(r.RawResponse))
+	copy(replayData.RawRequest, r.RawRequest)
+	copy(replayData.RawResponse, r.RawResponse)
+
+	return replayData
+}
+
 func sendTCP(host string, port int, packet []byte) (bytes.Buffer, error) {
 	var buf bytes.Buffer
 	var conn net.Conn

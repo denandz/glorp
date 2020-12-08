@@ -77,23 +77,15 @@ func Save(filename string, replays *ReplayView, proxy *ProxyView) bool {
 		return false
 	}
 
-	n := replays.Table.GetRowCount()
 	var replayentries []replay.Request
 
-	for i := 0; i < n; i++ {
-		id := replays.Table.GetCell(i, 0).Text
-		if req, ok := replays.entries[id]; ok {
-			replayentries = append(replayentries, *req)
-		}
+	for _, value := range replays.entries {
+		replayentries = append(replayentries, *value)
 	}
 
-	n = proxy.Table.GetRowCount()
 	var proxyentries []modifier.Entry
-	for i := 1; i < n; i++ {
-		id := proxy.Table.GetCell(i, 1).Text
-		if req := proxy.Logger.GetEntry(id); req != nil {
-			proxyentries = append(proxyentries, *req)
-		}
+	for _, value := range proxy.Logger.GetEntries() {
+		proxyentries = append(proxyentries, *value)
 	}
 
 	s := &savefile{

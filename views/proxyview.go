@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"sync"
 
 	"github.com/denandz/glorp/modifier"
 	"github.com/denandz/glorp/replay"
@@ -28,6 +29,15 @@ type ProxyView struct {
 	responseBox *tview.TextView  // response text box
 	Logger      *modifier.Logger // the Martian logger
 	proxychan   chan modifier.Notification
+
+	filter ViewFilter // filter for the proxy view
+}
+
+// ViewFilter - specify a match pattern and whether to include or exclude the pattern
+type ViewFilter struct {
+	pattern   string // regex pattern string
+	condition string // exclude or include
+	mutex     sync.Mutex
 }
 
 // GetView - should return a title and the top-level primitive
@@ -268,43 +278,46 @@ func (view *ProxyView) createProxy(app *tview.Application) {
 						url = string([]rune(entry.Request.URL)[0:100])
 					}
 
-					if elem.NotifType == 0 { // request
+					if view.proxyfilter(url) {
 
-						view.Table.SetCell(n, 1, tview.NewTableCell(elem.ID))
-						view.Table.SetCell(n, 2, tview.NewTableCell(url).SetExpansion(1))
-						view.Table.SetCell(n, 6, tview.NewTableCell(""))
-						view.Table.SetCell(n, 7, tview.NewTableCell(entry.Request.Method))
+						if elem.NotifType == 0 { // request
 
-						// if the table is focused, and the cursor is on the last entry, then update it to the new entry
-						if app.GetFocus() == view.Table {
-							if r, _ := view.Table.GetSelection(); r == n-1 {
-								view.Table.Select(n, 0)
+							view.Table.SetCell(n, 1, tview.NewTableCell(elem.ID))
+							view.Table.SetCell(n, 2, tview.NewTableCell(url).SetExpansion(1))
+							view.Table.SetCell(n, 6, tview.NewTableCell(""))
+							view.Table.SetCell(n, 7, tview.NewTableCell(entry.Request.Method))
+
+							// if the table is focused, and the cursor is on the last entry, then update it to the new entry
+							if app.GetFocus() == view.Table {
+								if r, _ := view.Table.GetSelection(); r == n-1 {
+									view.Table.Select(n, 0)
+								}
 							}
-						}
 
-					} else if elem.NotifType == 1 {
-						// find the table row with the corresponding request. I expect responses to arrive relatively soon after the request
-						// is sent, so using a reverse-search here
-						for i := n; i > 0; i-- {
-							if i < n && view.Table.GetCell(i, 1).Text == elem.ID {
-								view.Table.SetCell(i, 3, tview.NewTableCell(strconv.Itoa(entry.Response.Status)))
-								view.Table.SetCell(i, 4, tview.NewTableCell(strconv.Itoa(len(entry.Response.Raw))))
-								view.Table.SetCell(i, 5, tview.NewTableCell(strconv.FormatInt(entry.Time, 10)))
-								view.Table.SetCell(i, 6, tview.NewTableCell(entry.StartedDateTime.Format("02-01-2006 15:04:05")).SetAlign(tview.AlignRight))
+						} else if elem.NotifType == 1 {
+							// find the table row with the corresponding request. I expect responses to arrive relatively soon after the request
+							// is sent, so using a reverse-search here
+							for i := n; i > 0; i-- {
+								if i < n && view.Table.GetCell(i, 1).Text == elem.ID {
+									view.Table.SetCell(i, 3, tview.NewTableCell(strconv.Itoa(entry.Response.Status)))
+									view.Table.SetCell(i, 4, tview.NewTableCell(strconv.Itoa(len(entry.Response.Raw))))
+									view.Table.SetCell(i, 5, tview.NewTableCell(strconv.FormatInt(entry.Time, 10)))
+									view.Table.SetCell(i, 6, tview.NewTableCell(entry.StartedDateTime.Format("02-01-2006 15:04:05")).SetAlign(tview.AlignRight))
 
-								if app.GetFocus() == view.Table {
-									if r, _ := view.Table.GetSelection(); r == i {
-										view.Table.Select(i, 0)
+									if app.GetFocus() == view.Table {
+										if r, _ := view.Table.GetSelection(); r == i {
+											view.Table.Select(i, 0)
+										}
 									}
 								}
 							}
 						}
-					}
 
-					// redraw when adding, if the proxy view is in focus right now
-					focus := app.GetFocus()
-					if focus == view.Table || focus == view.requestBox || focus == view.responseBox {
-						app.Draw()
+						// redraw when adding, if the proxy view is in focus right now
+						focus := app.GetFocus()
+						if focus == view.Table || focus == view.requestBox || focus == view.responseBox {
+							app.Draw()
+						}
 					}
 				}
 			}
@@ -312,6 +325,12 @@ func (view *ProxyView) createProxy(app *tview.Application) {
 	}()
 
 	view.Logger = modifier.NewLogger(app, view.proxychan, view.Table)
+}
+
+// proxyfilter should take a URL, evaluate the filters and return true if the proxy entry should be displayed
+// or false if the response entry should not be displayed
+func (view *ProxyView) proxyfilter(url string) bool {
+	return true
 }
 
 func (view *ProxyView) writeRequest(r *modifier.Request) {
