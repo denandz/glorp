@@ -289,8 +289,6 @@ func (view *ProxyView) createProxy(app *tview.Application) {
 	go func() {
 		for elem := range view.proxychan {
 			if view.Table != nil && app != nil {
-				log.Println("FOOOO: " + elem.ID)
-
 				entry := view.Logger.GetEntry(elem.ID)
 				if entry != nil {
 					n := view.Table.GetRowCount()
