@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"sort"
 
 	"github.com/denandz/glorp/modifier"
 	"github.com/denandz/glorp/replay"
@@ -87,6 +88,13 @@ func Save(filename string, replays *ReplayView, proxy *ProxyView) bool {
 	for _, value := range proxy.Logger.GetEntries() {
 		proxyentries = append(proxyentries, *value)
 	}
+
+	// sort proxyentries by date
+	// We do this here to make inevitable processing of the save file with JQ, grep, sed, awk,
+	// and other such command line voodoo more pallatable
+	sort.Slice(proxyentries, func(i, j int) bool {
+		return proxyentries[i].StartedDateTime.Before(proxyentries[j].StartedDateTime)
+	})
 
 	s := &savefile{
 		Replays:      replayentries,
