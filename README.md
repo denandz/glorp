@@ -81,7 +81,7 @@ ctrl-p | All | Go to the previous page
 ctrl-r | Proxy/Replay | Send item to the replayer
 ctrl-s | Proxy/Replay - highlighted request/response | Save item to file
 g      | Proxy | Go to first entry in the proxy table
-G      | Proxy | Go to last entry int the proxy table
+G      | Proxy | Go to last entry in the proxy table
 /      | Proxy | Enter a search-filter regex to filter proxy entries by URL
 ctrl-b | Replay | Create a new blank replay item - useful for assembling requests from scratch
 ctrl-e | Replay - highlighted request/response | Edit request in `vi`, responses will open with `view`
