@@ -10,6 +10,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"os/exec"
 	"regexp"
 	"sort"
 	"strconv"
@@ -81,9 +82,34 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView) {
 			if entry := view.Logger.GetEntry(id); entry != nil {
 				saveModal(app, view.Layout, entry.Request.Raw)
 			}
+		} else if event.Key() == tcell.KeyCtrlE {
+			if entry := view.Logger.GetEntry(id); entry != nil {
+				app.EnableMouse(false)
+				app.Suspend(func() {
+					file, err := ioutil.TempFile(os.TempDir(), "glorp")
+					if err != nil {
+						log.Println(err)
+						return
+					}
+					defer os.Remove(file.Name())
+
+					file.Write(entry.Request.Raw)
+					file.Close()
+					cmd := exec.Command("/usr/bin/view", "-b", file.Name())
+					cmd.Stdout = os.Stdout
+					cmd.Stdin = os.Stdin
+					cmd.Stderr = os.Stderr
+					if err := cmd.Run(); err != nil {
+						log.Printf("failed to start editor: %v\n", err)
+					}
+				})
+
+				app.EnableMouse(true)
+			}
 		}
 		return event
 	})
+
 	view.responseBox = tview.NewTextView().SetWrap(false).SetDynamicColors(true)
 	view.responseBox.SetBorder(true)
 	view.responseBox.SetTitle("Response")
@@ -92,7 +118,32 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView) {
 			if entry := view.Logger.GetEntry(id); entry != nil {
 				saveModal(app, view.Layout, entry.Response.Raw)
 			}
+		} else if event.Key() == tcell.KeyCtrlE {
+			if entry := view.Logger.GetEntry(id); entry != nil {
+				app.EnableMouse(false)
+				app.Suspend(func() {
+					file, err := ioutil.TempFile(os.TempDir(), "glorp")
+					if err != nil {
+						log.Println(err)
+						return
+					}
+					defer os.Remove(file.Name())
+
+					file.Write(entry.Response.Raw)
+					file.Close()
+					cmd := exec.Command("/usr/bin/view", "-b", file.Name())
+					cmd.Stdout = os.Stdout
+					cmd.Stdin = os.Stdin
+					cmd.Stderr = os.Stderr
+					if err := cmd.Run(); err != nil {
+						log.Printf("failed to start editor: %v\n", err)
+					}
+				})
+
+				app.EnableMouse(true)
+			}
 		}
+
 		return event
 	})
 
