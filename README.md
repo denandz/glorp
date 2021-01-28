@@ -87,6 +87,7 @@ ctrl-e | Proxy - highlighted request/response | Open the request/response data i
 ctrl-b | Replay | Create a new blank replay item - useful for assembling requests from scratch
 ctrl-e | Replay - highlighted request/response | Edit request in `vi`, responses will open with `view`
 ctrl-x | Replay | Rename replay item
+ctrl-g | Replay | Send the request
 
 
 Ctrl-N and Ctrl-P cycle between the different pages, Tab/Shift+tab is used to cycle between each item within a page.

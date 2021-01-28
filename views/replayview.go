@@ -22,6 +22,7 @@ type ReplayView struct {
 	request      *tview.TextView // http request box
 	response     *tview.TextView // http response box
 	responseMeta *tview.Table    // metadata for size recieved and time taken
+	goButton     *tview.Button   // send button
 
 	host                *tview.InputField // host field input
 	port                *tview.InputField // port input
@@ -97,7 +98,7 @@ func (view *ReplayView) Init(app *tview.Application) {
 	view.request.SetWrap(false).SetBorder(true).SetTitle("Request")
 
 	// go and cancel buttons
-	goButton := tview.NewButton("Go")
+	view.goButton = tview.NewButton("Go")
 
 	// Host, Port, TLS and Auto-content-length fields
 	view.host = tview.NewInputField()
@@ -134,42 +135,8 @@ func (view *ReplayView) Init(app *tview.Application) {
 	view.response = tview.NewTextView().SetWrap(false)
 	view.response.SetBorder(true).SetTitle("Response")
 
-	goButton.SetSelectedFunc(func() {
-		if req, ok := view.entries[id]; ok {
-			view.response.Clear()
-			c := false
-
-			go func() {
-				size, err := req.SendRequest()
-				if req == view.entries[id] {
-					if size > 0 {
-						view.refreshReplay(req)
-					} else {
-						view.responseMeta.SetCell(0, 1, tview.NewTableCell("ERROR"))
-						view.responseMeta.SetCell(0, 3, tview.NewTableCell("ERROR"))
-						view.response.Clear()
-						fmt.Fprint(view.response, err)
-					}
-					app.Draw()
-				}
-				c = true
-			}()
-
-			spindex := 0
-			spinner := []string{"|", "/", "-", "\\"}
-			go func() {
-				for !c {
-					goButton.SetLabel("Go " + spinner[spindex])
-					app.Draw()
-					spindex++
-					if spindex == 3 {
-						spindex = 0
-					}
-					time.Sleep(100 * time.Millisecond)
-				}
-				goButton.SetLabel("Go")
-			}()
-		}
+	view.goButton.SetSelectedFunc(func() {
+		view.sendRequest(app, id)
 	})
 
 	view.Table = tview.NewTable()
@@ -294,7 +261,7 @@ func (view *ReplayView) Init(app *tview.Application) {
 	requestFlexView.SetDirection(tview.FlexRow)
 	requestFlexView.AddItem(connectionForm, 2, 1, false)
 	requestFlexView.AddItem(view.request, 0, 8, false)
-	requestFlexView.AddItem(goButton, 1, 1, false)
+	requestFlexView.AddItem(view.goButton, 1, 1, false)
 
 	responseFlexView := tview.NewFlex()
 	responseFlexView.SetDirection(tview.FlexRow)
@@ -305,7 +272,7 @@ func (view *ReplayView) Init(app *tview.Application) {
 	replayFlexView.AddItem(requestFlexView, 0, 4, false)
 	replayFlexView.AddItem(responseFlexView, 0, 4, false)
 
-	items := []tview.Primitive{view.Table, view.host, view.port, view.tls, view.updateContentLength, view.request, goButton, view.response}
+	items := []tview.Primitive{view.Table, view.host, view.port, view.tls, view.updateContentLength, view.request, view.goButton, view.response}
 	mainLayout.AddItem(replayFlexView, 0, 1, true)
 
 	view.Layout.AddPage("mainLayout", mainLayout, true, true)
@@ -357,6 +324,8 @@ func (view *ReplayView) Init(app *tview.Application) {
 			replayData.ID = "new"
 			view.AddItem(replayData)
 
+		case tcell.KeyCtrlG:
+			view.sendRequest(app, id)
 		}
 		return event
 	})
@@ -385,4 +354,44 @@ func (view *ReplayView) refreshReplay(r *replay.Request) {
 
 	view.responseMeta.SetCell(0, 1, tview.NewTableCell(strconv.Itoa(len(r.RawResponse))))
 	view.responseMeta.SetCell(0, 3, tview.NewTableCell(r.ResponseTime))
+}
+
+// Send the request
+
+func (view *ReplayView) sendRequest(app *tview.Application, id string) {
+	if req, ok := view.entries[id]; ok {
+		view.response.Clear()
+		c := false
+
+		go func() {
+			size, err := req.SendRequest()
+			if req == view.entries[id] {
+				if size > 0 {
+					view.refreshReplay(req)
+				} else {
+					view.responseMeta.SetCell(0, 1, tview.NewTableCell("ERROR"))
+					view.responseMeta.SetCell(0, 3, tview.NewTableCell("ERROR"))
+					view.response.Clear()
+					fmt.Fprint(view.response, err)
+				}
+				app.Draw()
+			}
+			c = true
+		}()
+
+		spindex := 0
+		spinner := []string{"|", "/", "-", "\\"}
+		go func() {
+			for !c {
+				view.goButton.SetLabel("Go " + spinner[spindex])
+				app.Draw()
+				spindex++
+				if spindex == 3 {
+					spindex = 0
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+			view.goButton.SetLabel("Go")
+		}()
+	}
 }
