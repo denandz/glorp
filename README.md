@@ -85,6 +85,7 @@ G      | Proxy | Go to last entry in the proxy table
 /      | Proxy | Enter a search-filter regex to filter proxy entries by URL
 ctrl-e | Proxy - highlighted request/response | Open the request/response data in `view`
 ctrl-b | Replay | Create a new blank replay item - useful for assembling requests from scratch
+ctrl-d | Replay | Delete replay item
 ctrl-e | Replay - highlighted request/response | Edit request in `vi`, responses will open with `view`
 ctrl-x | Replay | Rename replay item
 ctrl-g | Replay | Send the request

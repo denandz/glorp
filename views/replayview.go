@@ -76,6 +76,18 @@ func (view *ReplayView) RenameItem(r *replay.Request, newName string) {
 	}
 }
 
+// DeleteItem - delete an entry
+func (view *ReplayView) DeleteItem(r *replay.Request) {
+	delete(view.entries, r.ID)
+	n := view.Table.GetRowCount()
+	for i := 0; i < n; i++ {
+		if view.Table.GetCell(i, 0).Text == r.ID {
+			view.Table.RemoveRow(i)
+			break
+		}
+	}
+}
+
 // GetView - should return a title and the top-level primitive
 func (view *ReplayView) GetView() (title string, content tview.Primitive) {
 	return "Replay", view.Layout
@@ -309,6 +321,15 @@ func (view *ReplayView) Init(app *tview.Application) {
 					if r, ok := view.entries[id]; ok {
 						view.RenameItem(r, s)
 						id = r.ID
+					}
+				})
+			}
+
+		case tcell.KeyCtrlD:
+			if entry, ok := view.entries[id]; ok {
+				boolModal(app, view.Layout, "Delete "+entry.ID+"?", func(b bool) {
+					if b == true {
+						view.DeleteItem(entry)
 					}
 				})
 			}
