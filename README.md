@@ -58,12 +58,12 @@ State or Province Name (full name) [Some-State]:
 Locality Name (eg, city) []:
 Organization Name (eg, company) [Internet Widgits Pty Ltd]:
 Organizational Unit Name (eg, section) []:
-Common Name (e.g. server FQDN or YOUR name) []:
+Common Name (e.g. server FQDN or YOUR name) []: Maximum Flavour CA
 Email Address []:
 
 ```
 
-You can happily enter-enter-enter your way through the dialog above, then launch glorp:
+You can happily enter-enter-enter your way through most of the dialog above, *but remember to set a common name*. Without a common-name, some platforms like iOS don't play nice. Then, launch glorp:
 
 ```
 doi@buzdovan:~/go/src/glorp$ ./glorp -cert ca.crt -key ca.key
