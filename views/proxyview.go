@@ -213,13 +213,13 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView) {
 				// in tview (textview.go)
 
 				// this technique seems to make weird artifecats happen depending on the terminal
-				// some sensible mechanism for escaping data would probably be better...
+				// some sensible mechanism forResponse escaping data would probably be better...
 				//fmt.Fprint(view.requestBox, "\u2800")
 				view.writeRequest(entry.Request)
 				view.requestBox.ScrollToBeginning()
 			}
 			if entry.Response != nil {
-				view.writeResponse(entry.Response)
+				view.writeResponse(entry)
 				view.responseBox.ScrollToBeginning()
 			}
 		}
@@ -490,38 +490,44 @@ func (view *ProxyView) writeRequest(r *modifier.Request) {
 	fmt.Fprint(view.requestBox, "\u2800")
 }
 
-func (view *ProxyView) writeResponse(r *modifier.Response) {
+func (view *ProxyView) writeResponse(e *modifier.Entry) {
+	if e.Request.Method == "HEAD" {
+		fmt.Fprint(view.responseBox, string(e.Response.Raw))
+		fmt.Fprint(view.responseBox, "\u2800")
+		return
+	}
+
 	// if the response greater than 5 megabytes, just display the headers
-	if r.BodySize > 5*1024*1024 {
-		fmt.Fprint(view.responseBox, string(r.Raw[0:len(r.Raw)-int(r.BodySize)]))
+	if len(e.Response.Raw) > 5*1024*1024 {
+		fmt.Fprint(view.responseBox, string(e.Response.Raw[0:len(e.Response.Raw)-int(e.Response.BodySize)]))
 		fmt.Fprint(view.responseBox, "\r\n\r\nResponse too large to display - Replay or CTRL-S")
 		fmt.Fprint(view.responseBox, "\u2800")
 		return
 	}
 
-	reader := bytes.NewReader(r.Raw)
+	reader := bytes.NewReader(e.Response.Raw)
 	resp, err := http.ReadResponse(bufio.NewReader(reader), nil)
 
 	if err != nil {
-		log.Printf("[!] Error writeResponse %s\n", err)
+		log.Printf("[!] Error writeResponse - http.ReadResponse %s\n", err)
 		return
 	}
 
 	mv := messageview.New()
 	if err := mv.SnapshotResponse(resp); err != nil {
-		log.Printf("[!] Error writeResponse %s\n", err)
+		log.Printf("[!] Error writeResponse - mv.SnapshotResponse %s\n", err)
 		return
 	}
 
 	br, err := mv.Reader(messageview.Decode())
 	if err != nil {
-		log.Printf("[!] Error writeResponse %s\n", err)
+		log.Printf("[!] Error writeResponse - mv.Reader %s\n", err)
 		return
 	}
 
 	body, err := ioutil.ReadAll(br)
 	if err != nil {
-		log.Printf("[!] Error writeResponse %s\n", err)
+		log.Printf("[!] Error writeResponse - ioutil.ReadAll %s\n", err)
 		return
 	}
 
