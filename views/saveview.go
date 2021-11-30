@@ -51,7 +51,7 @@ func (view *SaveRestoreView) Init(app *tview.Application, replays *ReplayView, p
 			notifModal(app, view.Layout, msg)
 		} else {
 			boolModal(app, view.Layout, "File exists - overwrite?", func(b bool) {
-				if b == true {
+				if b {
 					if !Save(filename.GetText(), replays, proxy) {
 						log.Println("[!] Error: Save failed")
 					}

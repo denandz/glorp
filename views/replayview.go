@@ -328,7 +328,7 @@ func (view *ReplayView) Init(app *tview.Application) {
 		case tcell.KeyCtrlD:
 			if entry, ok := view.entries[id]; ok {
 				boolModal(app, view.Layout, "Delete "+entry.ID+"?", func(b bool) {
-					if b == true {
+					if b {
 						view.DeleteItem(entry)
 					}
 				})
