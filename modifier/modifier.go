@@ -219,10 +219,10 @@ func NewResponse(res *http.Response) (*Response, error) {
 
 // GetEntry - Get a specific entry by ID
 func (l *Logger) GetEntry(id string) *Entry {
-	var e *Entry
+	l.mu.Lock()
+	defer l.mu.Unlock()
 
-	// should check it exists here
-	e = l.entries[id]
+	e := l.entries[id]
 
 	return e
 }
