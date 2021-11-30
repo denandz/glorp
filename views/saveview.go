@@ -29,7 +29,7 @@ func (view *SaveRestoreView) GetView() (title string, content tview.Primitive) {
 }
 
 // Init - Initialize the save view
-func (view *SaveRestoreView) Init(app *tview.Application, replays *ReplayView, proxy *ProxyView) {
+func (view *SaveRestoreView) Init(app *tview.Application, replays *ReplayView, proxy *ProxyView, sitemap *SiteMapView) {
 	view.Layout = tview.NewPages()
 	var msg string
 
@@ -60,7 +60,7 @@ func (view *SaveRestoreView) Init(app *tview.Application, replays *ReplayView, p
 		}
 	})
 	form.AddButton("Load", func() {
-		if Load(filename.GetText(), replays, proxy) {
+		if Load(filename.GetText(), replays, proxy, sitemap) {
 			msg = "Loaded"
 		} else {
 			msg = "Load failed"
@@ -119,7 +119,7 @@ func Save(filename string, replays *ReplayView, proxy *ProxyView) bool {
 }
 
 // Load - needs to read a json file, clear out the proxy and replay ables and repopulate them
-func Load(filename string, replays *ReplayView, prox *ProxyView) bool {
+func Load(filename string, replays *ReplayView, prox *ProxyView, sitemap *SiteMapView) bool {
 	f, err := os.Open(filename)
 	if err != nil {
 		log.Println(err)
@@ -147,6 +147,7 @@ func Load(filename string, replays *ReplayView, prox *ProxyView) bool {
 		prox.Logger.AddEntry(v)
 	}
 	prox.reloadtable()
+	sitemap.reload()
 
 	for i := range s.Replays {
 		replays.AddItem(&s.Replays[i])

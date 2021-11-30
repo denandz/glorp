@@ -14,17 +14,17 @@ import (
 
 // Logger maintains request and response log entries.
 type Logger struct {
-	mu               sync.Mutex
-	entries          Entries
-	notificationchan chan Notification
-	app              *tview.Application
-	table            *tview.Table
+	mu                      sync.Mutex
+	entries                 Entries
+	proxynotificationchan   chan Notification
+	sitemapnotificationchan chan Notification
+	app                     *tview.Application
 }
 
 // Notification channel struct. Holds the element ID and an int for request or response
 type Notification struct {
 	ID        string
-	NotifType int // 0 == request, 1 == response, 2 == request and response (used by save/load)
+	NotifType int // 0 == request, 1 == response
 }
 
 // Entries stores all the Entry items
@@ -82,12 +82,12 @@ type Response struct {
 
 // NewLogger returns a HAR logger. The returned
 // logger logs all request post data and response bodies by default.
-func NewLogger(app *tview.Application, notifchan chan Notification, table *tview.Table) *Logger {
+func NewLogger(app *tview.Application, proxychan chan Notification, sitemapchan chan Notification) *Logger {
 	l := &Logger{
-		entries:          make(map[string]*Entry),
-		app:              app,
-		table:            table,
-		notificationchan: notifchan,
+		entries:                 make(map[string]*Entry),
+		app:                     app,
+		proxynotificationchan:   proxychan,
+		sitemapnotificationchan: sitemapchan,
 	}
 	return l
 }
@@ -111,7 +111,8 @@ func (l *Logger) ModifyRequest(req *http.Request) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	l.notificationchan <- Notification{id, 0}
+	l.proxynotificationchan <- Notification{id, 0}
+	l.sitemapnotificationchan <- Notification{id, 0}
 
 	return e
 }
@@ -134,7 +135,7 @@ func (l *Logger) RecordRequest(id string, req *http.Request) error {
 	defer l.mu.Unlock()
 
 	if _, exists := l.entries[id]; exists {
-		return fmt.Errorf("Duplicate request ID: %s", id)
+		return fmt.Errorf("duplicate request ID: %s", id)
 	}
 	l.entries[id] = entry
 
@@ -169,7 +170,7 @@ func (l *Logger) ModifyResponse(res *http.Response) error {
 
 	e := l.RecordResponse(id, res)
 
-	l.notificationchan <- Notification{id, 1}
+	l.proxynotificationchan <- Notification{id, 1}
 
 	return e
 }

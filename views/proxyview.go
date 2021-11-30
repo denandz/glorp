@@ -32,7 +32,6 @@ type ProxyView struct {
 	requestBox  *tview.TextView  // request text box
 	responseBox *tview.TextView  // response text box
 	Logger      *modifier.Logger // the Martian logger
-	proxychan   chan modifier.Notification
 
 	filter ViewFilter // filter for the proxy view
 }
@@ -50,9 +49,12 @@ func (view *ProxyView) GetView() (title string, content tview.Primitive) {
 }
 
 // Init - Main initialization method for the proxy view
-func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView) {
+func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView, logger *modifier.Logger,
+	channel chan modifier.Notification) {
 	var id string
 	var saveBuffer []byte
+
+	view.Logger = logger
 
 	view.Layout = tview.NewPages()
 	mainLayout := tview.NewFlex()
@@ -359,16 +361,14 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView) {
 	view.Layout.AddPage("mainlayout", mainLayout, true, true)
 	view.Layout.AddPage("saveModal", newmodal(saveModal, 40, 5), true, false)
 
-	view.createProxy(app)
+	view.proxyReceiver(app, channel)
 
 }
 
-func (view *ProxyView) createProxy(app *tview.Application) {
-	// Create the martian logger and a channel for new item notification
-
-	view.proxychan = make(chan modifier.Notification, 1024)
+func (view *ProxyView) proxyReceiver(app *tview.Application, channel chan modifier.Notification) {
+	// loop the proxy channel and add items to the main table as they arrive
 	go func() {
-		for elem := range view.proxychan {
+		for elem := range channel {
 			if view.Table != nil && app != nil {
 				entry := view.Logger.GetEntry(elem.ID)
 				if entry != nil {
@@ -395,8 +395,6 @@ func (view *ProxyView) createProxy(app *tview.Application) {
 			}
 		}
 	}()
-
-	view.Logger = modifier.NewLogger(app, view.proxychan, view.Table)
 }
 
 // AddEntry - add a modifier entry to the proxy table, t indicates request, response or save/load
@@ -466,7 +464,7 @@ func (view *ProxyView) proxyfilter(url string) bool {
 	}
 }
 
-// reloadtable clears the proxy table an redraws, happens when changing the filter regex
+// reloadtable clears the proxy table and redraws, happens when changing the filter regex
 func (view *ProxyView) reloadtable() {
 	view.Table.Clear()
 

@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/denandz/glorp/modifier"
 	"github.com/denandz/glorp/proxy"
 	"github.com/denandz/glorp/views"
 
@@ -41,10 +42,6 @@ func main() {
 	replayview := new(views.ReplayView)
 	replayview.Init(app)
 
-	// create the main proxy window
-	proxyview := new(views.ProxyView)
-	proxyview.Init(app, replayview)
-
 	// start the Martian proxy
 	config := &proxy.Config{
 		Addr: *addr,
@@ -53,7 +50,14 @@ func main() {
 		Port: *port,
 	}
 
-	proxy.StartProxy(proxyview.Logger, config)
+	proxychan := make(chan modifier.Notification, 1024)
+	sitemapchan := make(chan modifier.Notification, 1024)
+	logger := modifier.NewLogger(app, proxychan, sitemapchan)
+	proxy.StartProxy(logger, config)
+
+	// create the main proxy window
+	proxyview := new(views.ProxyView)
+	proxyview.Init(app, replayview, logger, proxychan)
 
 	// View for the logs, create this now so we dont miss logs
 	logText := tview.NewTextView()
@@ -62,13 +66,18 @@ func main() {
 
 	Log := func() (title string, content tview.Primitive) { return "Log", logText }
 
+	// sitemap view
+	sitemapview := new(views.SiteMapView)
+	sitemapview.Init(app, proxyview.Logger, sitemapchan)
+
 	// Save/load view
 	saveview := new(views.SaveRestoreView)
-	saveview.Init(app, replayview, proxyview)
+	saveview.Init(app, replayview, proxyview, sitemapview)
 
 	// Pages
 	pages := []Window{
 		proxyview.GetView,
+		sitemapview.GetView,
 		replayview.GetView,
 		Log,
 		saveview.GetView,
@@ -134,14 +143,6 @@ func main() {
 			nextPage()
 		case tcell.KeyCtrlP:
 			prevPage()
-			/*	default:
-				// find out which page has focus and dispatch the event
-				// workaround for a tview issue, InputCapture methods for flex
-				// views arent fired - https://github.com/rivo/tview/issues/421
-
-				_, currentPage := mainWindow.GetFrontPage()
-				inputFunc := currentPage.InputHandler()
-				inputFunc(event, nil)*/
 		}
 
 		return event
