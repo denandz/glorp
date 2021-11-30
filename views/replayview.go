@@ -1,6 +1,7 @@
 package views
 
 import (
+	"container/ring"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -285,6 +286,12 @@ func (view *ReplayView) Init(app *tview.Application) {
 	replayFlexView.AddItem(responseFlexView, 0, 4, false)
 
 	items := []tview.Primitive{view.Table, view.host, view.port, view.tls, view.updateContentLength, view.request, view.goButton, view.response}
+	focusRing := ring.New(len(items))
+	for i := 0; i < len(items); i++ {
+		focusRing.Value = items[i]
+		focusRing = focusRing.Next()
+	}
+
 	mainLayout.AddItem(replayFlexView, 0, 1, true)
 
 	view.Layout.AddPage("mainLayout", mainLayout, true, true)
@@ -292,28 +299,12 @@ func (view *ReplayView) Init(app *tview.Application) {
 	mainLayout.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyTab:
-			// find out which item has focus, go to the next one
-			for index, primitive := range items {
-				if primitive == app.GetFocus() {
-					app.SetFocus(items[(index+1)%len(items)])
-					return event
-				}
-			}
-
-			// nothing that we'd want to focus on is focused, yet input is still sinking here...
-			// focus on the first item
-			app.SetFocus(items[0])
+			focusRing = focusRing.Next()
+			app.SetFocus(focusRing.Value.(tview.Primitive))
 
 		case tcell.KeyBacktab:
-			// find out which item has focus, go to the previous one
-			for index, primitive := range items {
-				if primitive == app.GetFocus() {
-					app.SetFocus(items[(index-1+len(items))%len(items)])
-					return event
-				}
-			}
-
-			app.SetFocus(items[0])
+			focusRing = focusRing.Prev()
+			app.SetFocus(focusRing.Value.(tview.Primitive))
 
 		case tcell.KeyCtrlX:
 			if _, ok := view.entries[id]; ok {

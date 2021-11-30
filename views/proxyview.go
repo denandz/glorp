@@ -193,6 +193,11 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView) {
 
 	// hacky way to deal with item focus...
 	items := []tview.Primitive{view.Table, view.requestBox, view.responseBox}
+	focusRing := ring.New(len(items))
+	for i := 0; i < len(items); i++ {
+		focusRing.Value = items[i]
+		focusRing = focusRing.Next()
+	}
 
 	view.Table.SetSelectionChangedFunc(func(row int, column int) {
 		// We need this check to fix an issue with mouse support. If you click somewhere in the
@@ -340,28 +345,12 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView) {
 
 	mainLayout.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyTab {
-			// find out which item has focus, go to the next one
-			for index, primitive := range items {
-				if primitive == app.GetFocus() {
-					app.SetFocus(items[(index+1)%len(items)])
-					return event
-				}
-			}
-
-			// nothing that we'd want to focus on is focused, yet input is still sinking here...
-			// focus on the first item
-			app.SetFocus(items[0])
+			focusRing = focusRing.Next()
+			app.SetFocus(focusRing.Value.(tview.Primitive))
 		}
 		if event.Key() == tcell.KeyBacktab {
-			// find out which item has focus, go to the previous one
-			for index, primitive := range items {
-				if primitive == app.GetFocus() {
-					app.SetFocus(items[(index-1+len(items))%len(items)])
-					return event
-				}
-			}
-
-			app.SetFocus(items[0])
+			focusRing = focusRing.Prev()
+			app.SetFocus(focusRing.Value.(tview.Primitive))
 		}
 
 		return event
