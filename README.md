@@ -97,7 +97,11 @@ Ctrl-N and Ctrl-P cycle between the different pages, Tab/Shift+tab is used to cy
 
 The proxy page shows incoming requests. If you select the last item (bottom item), then the view will follow new requests.
 
-## Replay Page
+### Sitemap Page
+
+The sitemap shows the various URLs and hosts that have been accessed via the proxy. You can navigate the list and hit `enter` to drill down further. This only shows URLs and does not support request/response data in the sitemap view yet.
+
+### Replay Page
 
 In the proxy page, hit `ctrl-r` on an entry and it will be sent to the replay page, where you can modify the request and re-issue it. If you hit `ctrl-r` in the Replay page, it'll duplicated the current item.
 

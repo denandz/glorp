@@ -11,7 +11,7 @@ import (
 	"github.com/rivo/tview"
 )
 
-// SaveRestoreView - the main struct for the view
+// SiteMapView - the main struct for the view
 type SiteMapView struct {
 	Layout   *tview.Pages
 	treeView *tview.TreeView  // the sitemap tree
