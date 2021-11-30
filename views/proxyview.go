@@ -3,6 +3,7 @@ package views
 import (
 	"bufio"
 	"bytes"
+	"container/ring"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -38,9 +39,9 @@ type ProxyView struct {
 
 // ViewFilter - specify a match pattern and whether to include or exclude the pattern
 type ViewFilter struct {
-	pattern   string // regex pattern string
-	condition string // exclude or include
-	mutex     sync.Mutex
+	pattern string // regex pattern string
+	exclude bool   // exclude, rather than include, regex matches
+	mutex   sync.Mutex
 }
 
 // GetView - should return a title and the top-level primitive
@@ -280,13 +281,53 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView) {
 
 		switch event.Rune() {
 		case '/':
-			stringModal(app, view.Layout, "Set URL Display Filter", view.filter.pattern, func(filter string) {
-				view.filter.mutex.Lock()
-				view.filter.pattern = filter
-				view.filter.mutex.Unlock()
+			textInput := tview.NewInputField()
+			textInput.SetText(view.filter.pattern)
+			excludeCheckbox := tview.NewCheckbox().SetChecked(false)
+			excludeCheckbox.SetLabelColor(tcell.ColorMediumPurple)
+			excludeCheckbox.SetLabel("Inverse Match?")
 
+			modal := tview.NewFlex().AddItem(textInput, 0, 1, true)
+			okButton := tview.NewButton("OK").SetSelectedFunc(func() {
+				view.Layout.HidePage("stringmodal")
+				view.filter.mutex.Lock()
+				view.filter.pattern = textInput.GetText()
+				view.filter.exclude = excludeCheckbox.IsChecked()
+				view.filter.mutex.Unlock()
 				view.reloadtable()
+				view.Layout.RemovePage("stringmodal")
 			})
+
+			modal.SetBorder(true)
+			modal.SetDirection(tview.FlexRow)
+			modal.SetTitle("Set URL Display Filter")
+			modal.AddItem(excludeCheckbox, 0, 1, false)
+			modal.AddItem(okButton, 0, 1, false)
+
+			r := ring.New(3)
+			r.Value = textInput
+			r = r.Next()
+			r.Value = excludeCheckbox
+			r = r.Next()
+			r.Value = okButton
+			r = r.Next()
+			modal.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+				if event.Key() == tcell.KeyTab {
+					r = r.Next()
+					app.SetFocus(r.Value.(tview.Primitive))
+				}
+				if event.Key() == tcell.KeyBacktab {
+					r = r.Prev()
+					app.SetFocus(r.Value.(tview.Primitive))
+				}
+
+				return event
+			})
+
+			view.Layout.AddPage("stringmodal", newmodal(modal, 40, 5), true, false)
+			view.Layout.ShowPage("stringmodal")
+			app.SetFocus(textInput)
+
 		case 'g':
 			view.Table.ScrollToBeginning()
 
@@ -429,7 +470,11 @@ func (view *ProxyView) proxyfilter(url string) bool {
 		return true // something went wrong, default to display
 	}
 
-	return match
+	if view.filter.exclude {
+		return !match
+	} else {
+		return match
+	}
 }
 
 // reloadtable clears the proxy table an redraws, happens when changing the filter regex
