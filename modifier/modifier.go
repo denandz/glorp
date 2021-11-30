@@ -9,7 +9,7 @@ import (
 
 	"github.com/rivo/tview"
 
-	"github.com/google/martian"
+	"github.com/google/martian/v3"
 )
 
 // Logger maintains request and response log entries.

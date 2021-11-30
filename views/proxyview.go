@@ -20,7 +20,7 @@ import (
 	"github.com/denandz/glorp/replay"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/google/martian/messageview"
+	"github.com/google/martian/v3/messageview"
 	"github.com/rivo/tview"
 )
 

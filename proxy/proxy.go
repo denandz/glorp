@@ -3,16 +3,17 @@ package proxy
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"github.com/denandz/glorp/modifier"
 	"log"
 	"net"
 	"net/http"
 	"strconv"
 	"time"
 
-	"github.com/google/martian"
-	"github.com/google/martian/fifo"
-	"github.com/google/martian/mitm"
+	"github.com/denandz/glorp/modifier"
+
+	"github.com/google/martian/v3"
+	"github.com/google/martian/v3/fifo"
+	"github.com/google/martian/v3/mitm"
 )
 
 // Config - struct that holds the proxy config
