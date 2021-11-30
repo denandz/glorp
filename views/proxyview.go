@@ -283,7 +283,7 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView) {
 		case '/':
 			textInput := tview.NewInputField()
 			textInput.SetText(view.filter.pattern)
-			excludeCheckbox := tview.NewCheckbox().SetChecked(false)
+			excludeCheckbox := tview.NewCheckbox().SetChecked(view.filter.exclude)
 			excludeCheckbox.SetLabelColor(tcell.ColorMediumPurple)
 			excludeCheckbox.SetLabel("Inverse Match?")
 
