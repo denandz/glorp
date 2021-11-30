@@ -280,9 +280,9 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView) {
 
 		switch event.Rune() {
 		case '/':
-			stringModal(app, view.Layout, "Set URL Display Filter", view.filter.condition, func(filter string) {
+			stringModal(app, view.Layout, "Set URL Display Filter", view.filter.pattern, func(filter string) {
 				view.filter.mutex.Lock()
-				view.filter.condition = filter
+				view.filter.pattern = filter
 				view.filter.mutex.Unlock()
 
 				view.reloadtable()
@@ -423,7 +423,7 @@ func (view *ProxyView) proxyfilter(url string) bool {
 	view.filter.mutex.Lock()
 	defer view.filter.mutex.Unlock()
 
-	match, err := regexp.MatchString(view.filter.condition, url)
+	match, err := regexp.MatchString(view.filter.pattern, url)
 	if err != nil {
 		log.Printf("[!] Error proxyfilter %s\n", err)
 		return true // something went wrong, default to display
