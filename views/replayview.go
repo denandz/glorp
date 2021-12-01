@@ -281,7 +281,7 @@ func (view *ReplayView) Init(app *tview.Application) {
 	responseFlexView.AddItem(view.responseMeta, 2, 1, false)
 	responseFlexView.AddItem(view.response, 0, 8, false)
 
-	replayFlexView.AddItem(view.Table, 25, 4, true)
+	replayFlexView.AddItem(view.Table, 18, 4, true)
 	replayFlexView.AddItem(requestFlexView, 0, 4, false)
 	replayFlexView.AddItem(responseFlexView, 0, 4, false)
 
