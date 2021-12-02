@@ -105,17 +105,37 @@ The sitemap shows the various URLs and hosts that have been accessed via the pro
 
 In the proxy page, hit `ctrl-r` on an entry and it will be sent to the replay page, where you can modify the request and re-issue it. If you hit `ctrl-r` in the Replay page, it'll duplicated the current item.
 
-### Editing
+#### Editing
 
 Highlight the request text box and hit `ctrl-e`. This will open the request in VI and let you edit it. 
 
 Pro-tip for content length: If you highlight your modified request body in visual mode (`v`) and then hit `g`->`ctrl+g` it will show you how many bytes are selected, and you can update the content-length header accordingly.
 
-## Log Page
+#### Sending Requests
+
+The current replay request can be sent by either hitting the `Go` button or using `ctrl-g`.
+
+If the `AutoSend` checkbox is selected, then after the request is edited it will be automatically sent.
+
+#### Using an external editor
+
+The highlight->`ctrl-e`->edit in VI->exit VI->send flow is admittedly clunky, so Glorp also supports using an external editor. If you enable the `Ext. Editor` check box, the request is spooled out to a temporary file. Any edits to this file are picked up by Glorp. This can be combined with auto-send and auto-content-length updating.
+
+Note: The temp file is removed when `Ext. Editor` is unchecked. If you do not uncheck this, Glorp will not clean up the temp file for you.
+
+Enabling `Ext. Editor` should show you the filename to edit:
+
+![ext-editor](./gif/ext-editor.png)
+
+You can then open that file with any editor and changes will auto-load into Glorp:
+
+![replayer](./gif/replayer.gif)
+
+### Log Page
 
 This is the general log info page and takes no user input. Glorp is set up such that any call to `log.Println` or similar will end up in this view. 
 
-## Save/Load Page
+### Save/Load Page
 
 This one should hopefully be self explanatory. Lets you save and load all the proxy entries and replay entries. Writes out to a JSON file or reads in a JSON file. WARNING: Loading will delete all existing proxy and replay entries, rather than append to them.
 
