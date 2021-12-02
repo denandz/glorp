@@ -6,9 +6,12 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 // Request - main struct that holds replay request/response data
@@ -20,6 +23,9 @@ type Request struct {
 	RawRequest   []byte // the raw body
 	RawResponse  []byte // the raw body
 	ResponseTime string // the time it took to recieve the response
+
+	ExternalFile *os.File          `json:"-"` // external file that is currently used to update the request
+	Watcher      *fsnotify.Watcher `json:"-"` // watcher for external file updates
 }
 
 // SendRequest - takes a destination host, port and ssl boolean. Fires the request and writes the
@@ -93,6 +99,8 @@ func (r *Request) Copy() Request {
 
 	replayData = *r
 
+	replayData.ExternalFile = nil
+	replayData.Watcher = nil
 	replayData.RawRequest = make([]byte, len(r.RawRequest))
 	replayData.RawResponse = make([]byte, len(r.RawResponse))
 	copy(replayData.RawRequest, r.RawRequest)
