@@ -148,7 +148,6 @@ func sendTCP(host string, port int, packet []byte) (bytes.Buffer, error) {
 
 func sendTLS(host string, port int, packet []byte) (bytes.Buffer, error) {
 	var buf bytes.Buffer
-	var conn net.Conn
 
 	conf := &tls.Config{
 		// No certificate verification
@@ -156,17 +155,11 @@ func sendTLS(host string, port int, packet []byte) (bytes.Buffer, error) {
 	}
 
 	addr := strings.Join([]string{host, strconv.Itoa(port)}, ":")
-	conn, err := net.DialTimeout("tcp", addr, 30*time.Second)
 
+	d := net.Dialer{Timeout: 30 * time.Second}
+
+	tlsConn, err := tls.DialWithDialer(&d, "tcp", addr, conf)
 	if err != nil {
-		log.Printf("[!] Replay sendTLS: %s\n", err)
-		return buf, err
-	}
-
-	defer conn.Close()
-
-	tlsConn := tls.Client(conn, conf)
-	if err = tlsConn.Handshake(); err != nil {
 		log.Printf("[!] Replay sendTLS: %s\n", err)
 		return buf, err
 	}
