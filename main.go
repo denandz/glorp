@@ -61,6 +61,11 @@ func main() {
 
 	// View for the logs, create this now so we dont miss logs
 	logText := tview.NewTextView()
+	logText.SetChangedFunc(func() {
+		if logText.HasFocus() {
+			app.Draw()
+		}
+	})
 	log.SetOutput(logText)
 	log.Println("Logger started")
 

@@ -89,6 +89,9 @@ func StartProxy(logger *modifier.Logger, config *Config) *martian.Proxy {
 		}
 
 		mc.SkipTLSVerify(true)
+		mc.SetHandshakeErrorCallback(func(req *http.Request, err error) {
+			log.Printf("[!] TLS client handshake error for domain %s: %v\n", req.Host, err)
+		})
 
 		p.SetMITM(mc)
 	}
