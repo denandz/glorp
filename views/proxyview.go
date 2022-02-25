@@ -29,8 +29,8 @@ import (
 type ProxyView struct {
 	Layout      *tview.Pages     // The main replay view, all others should be underneath Layout
 	Table       *tview.Table     // the proxy history table
-	requestBox  *tview.TextView  // request text box
-	responseBox *tview.TextView  // response text box
+	requestBox  *TextPrimitive   // request text box
+	responseBox *TextPrimitive   // response text box
 	Logger      *modifier.Logger // the Martian logger
 
 	filter ViewFilter // filter for the proxy view
@@ -77,7 +77,7 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView, logg
 	view.Table.SetCell(0, 7, tview.NewTableCell("Method").SetTextColor(tcell.ColorMediumPurple).SetSelectable(false))
 
 	reqRespFlexView := tview.NewFlex()
-	view.requestBox = tview.NewTextView().SetWrap(false).SetDynamicColors(true)
+	view.requestBox = NewTextPrimitive()
 	view.requestBox.SetBorder(true)
 	view.requestBox.SetTitle("Request")
 	view.requestBox.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -113,7 +113,7 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView, logg
 		return event
 	})
 
-	view.responseBox = tview.NewTextView().SetWrap(false).SetDynamicColors(true)
+	view.responseBox = NewTextPrimitive()
 	view.responseBox.SetBorder(true)
 	view.responseBox.SetTitle("Response")
 	view.responseBox.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -216,13 +216,7 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView, logg
 		id = view.Table.GetCell(row, 1).Text
 		if entry := view.Logger.GetEntry(id); entry != nil {
 			if entry.Request != nil {
-				// Appending a UTF8 braille pattern blank (U+2800)
-				// to deal with the partial-trailing-utf8-rune logic
-				// in tview (textview.go)
 
-				// this technique seems to make weird artifecats happen depending on the terminal
-				// some sensible mechanism forResponse escaping data would probably be better...
-				//fmt.Fprint(view.requestBox, "\u2800")
 				view.writeRequest(entry.Request)
 				view.requestBox.ScrollToBeginning()
 			}

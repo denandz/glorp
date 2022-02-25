@@ -19,12 +19,12 @@ import (
 
 // ReplayView - struct that holds the main replayview elements
 type ReplayView struct {
-	Layout       *tview.Pages    // The main replay view, all others should be underneath Layout
-	Table        *tview.Table    // the main table that lists all the replay items
-	request      *tview.TextView // http request box
-	response     *tview.TextView // http response box
-	responseMeta *tview.Table    // metadata for size recieved and time taken
-	goButton     *tview.Button   // send button
+	Layout       *tview.Pages   // The main replay view, all others should be underneath Layout
+	Table        *tview.Table   // the main table that lists all the replay items
+	request      *TextPrimitive // http request box
+	response     *TextPrimitive // http response box
+	responseMeta *tview.Table   // metadata for size recieved and time taken
+	goButton     *tview.Button  // send button
 
 	host                *tview.InputField // host field input
 	port                *tview.InputField // port input
@@ -216,8 +216,8 @@ func (view *ReplayView) Init(app *tview.Application) {
 	mainLayout := tview.NewFlex()
 
 	replayFlexView := tview.NewFlex()
-	view.request = tview.NewTextView()
-	view.request.SetWrap(false).SetBorder(true).SetTitle("Request")
+	view.request = NewTextPrimitive()
+	view.request.SetBorder(true).SetTitle("Request")
 
 	// go and cancel buttons
 	view.goButton = tview.NewButton("Go")
@@ -265,7 +265,7 @@ func (view *ReplayView) Init(app *tview.Application) {
 	view.autoSend.SetLabelColor(tcell.ColorMediumPurple)
 	view.autoSend.SetLabel("AutoSend")
 
-	view.response = tview.NewTextView().SetWrap(false)
+	view.response = NewTextPrimitive()
 	view.response.SetBorder(true).SetTitle("Response")
 
 	view.goButton.SetSelectedFunc(func() {
