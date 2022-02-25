@@ -11,7 +11,7 @@ import (
 
 // TextPrimitive is a basic, line wrapped text view that is designed to replicate a
 // severely cut down version of tview's TextView, removing color support, grapheme cluster
-// handling, regions and other functionality with the aim of increasing peromance
+// handling, regions and other functionality with the aim of increasing performance
 // and being able to handle megabytes of data with wrapping.
 // You probably don't want to use this.
 // See: https://github.com/rivo/tview/issues/686
