@@ -229,57 +229,6 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView, logg
 
 	// input captures
 	view.Table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyCtrlR:
-			if entry := view.Logger.GetEntry(id); entry != nil {
-				replayData := &replay.Request{}
-
-				URL, err := url.Parse(entry.Request.URL)
-				if err != nil {
-					log.Printf("Error: Could not parse URL for request %s: %s\n", id, err)
-					return event
-				}
-
-				// Parse the raw request and add a Connection: close header.
-				// We do this here instead of on request launch so that the user is
-				// free to edit the request in the replayer and remove the header
-				reader := bytes.NewReader(entry.Request.Raw)
-				req, err := http.ReadRequest(bufio.NewReader(reader))
-
-				if err != nil {
-					log.Printf("Error: Issue in ReadRequest for request %s: %s\n", id, err)
-					replayData.RawRequest = make([]byte, len(entry.Request.Raw))
-					copy(replayData.RawRequest, entry.Request.Raw)
-				} else {
-					req.Header.Set("Connection", "close")
-					replayData.RawRequest, err = httputil.DumpRequest(req, true)
-
-					if err != nil {
-						// fallback to the original request
-						log.Printf("Error: Issue in DumpRequest for request %s: %s\n", id, err)
-						replayData.RawRequest = make([]byte, len(entry.Request.Raw))
-						copy(replayData.RawRequest, entry.Request.Raw)
-					}
-				}
-
-				replayData.Host = URL.Hostname()
-				replayData.Port = URL.Port()
-				if URL.Scheme == "https" {
-					replayData.TLS = true
-
-					if replayData.Port == "" {
-						replayData.Port = "443"
-					}
-				} else if replayData.Port == "" {
-					replayData.Port = "80"
-				}
-				replayData.ID = id
-
-				replayview.AddItem(replayData)
-			}
-
-		}
-
 		switch event.Rune() {
 		case '/':
 			textInput := tview.NewInputField()
@@ -340,13 +289,63 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView, logg
 	})
 
 	mainLayout.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyTab {
+
+		switch event.Key() {
+		case tcell.KeyTAB:
 			focusRing = focusRing.Next()
 			app.SetFocus(focusRing.Value.(tview.Primitive))
-		}
-		if event.Key() == tcell.KeyBacktab {
+
+		case tcell.KeyBacktab:
 			focusRing = focusRing.Prev()
 			app.SetFocus(focusRing.Value.(tview.Primitive))
+
+		case tcell.KeyCtrlR:
+			if entry := view.Logger.GetEntry(id); entry != nil {
+				replayData := &replay.Request{}
+
+				URL, err := url.Parse(entry.Request.URL)
+				if err != nil {
+					log.Printf("Error: Could not parse URL for request %s: %s\n", id, err)
+					return event
+				}
+
+				// Parse the raw request and add a Connection: close header.
+				// We do this here instead of on request launch so that the user is
+				// free to edit the request in the replayer and remove the header
+				reader := bytes.NewReader(entry.Request.Raw)
+				req, err := http.ReadRequest(bufio.NewReader(reader))
+
+				if err != nil {
+					log.Printf("Error: Issue in ReadRequest for request %s: %s\n", id, err)
+					replayData.RawRequest = make([]byte, len(entry.Request.Raw))
+					copy(replayData.RawRequest, entry.Request.Raw)
+				} else {
+					req.Header.Set("Connection", "close")
+					replayData.RawRequest, err = httputil.DumpRequest(req, true)
+
+					if err != nil {
+						// fallback to the original request
+						log.Printf("Error: Issue in DumpRequest for request %s: %s\n", id, err)
+						replayData.RawRequest = make([]byte, len(entry.Request.Raw))
+						copy(replayData.RawRequest, entry.Request.Raw)
+					}
+				}
+
+				replayData.Host = URL.Hostname()
+				replayData.Port = URL.Port()
+				if URL.Scheme == "https" {
+					replayData.TLS = true
+
+					if replayData.Port == "" {
+						replayData.Port = "443"
+					}
+				} else if replayData.Port == "" {
+					replayData.Port = "80"
+				}
+				replayData.ID = id
+
+				replayview.AddItem(replayData)
+			}
 		}
 
 		return event
