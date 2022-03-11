@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"sync"
@@ -87,6 +88,11 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView, logg
 			}
 		} else if event.Key() == tcell.KeyCtrlE {
 			if entry := view.Logger.GetEntry(id); entry != nil {
+				if runtime.GOOS == "windows" {
+					log.Println("[!] Built-in editors are not supported under windows yet")
+					return event
+				}
+
 				app.EnableMouse(false)
 				app.Suspend(func() {
 					file, err := ioutil.TempFile(os.TempDir(), "glorp")
@@ -123,6 +129,11 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView, logg
 			}
 		} else if event.Key() == tcell.KeyCtrlE {
 			if entry := view.Logger.GetEntry(id); entry != nil {
+				if runtime.GOOS == "windows" {
+					log.Println("[!] Built-in editors are not supported under windows yet")
+					return event
+				}
+
 				app.EnableMouse(false)
 				app.Suspend(func() {
 					file, err := ioutil.TempFile(os.TempDir(), "glorp")

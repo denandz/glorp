@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -302,6 +303,11 @@ func (view *ReplayView) Init(app *tview.Application) {
 	view.request.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlE {
 			if req, ok := view.entries[view.id]; ok && !view.externalEditor.IsChecked() {
+				if runtime.GOOS == "windows" {
+					log.Println("[!] Built-in editors are not supported under windows yet")
+					return event
+				}
+
 				app.EnableMouse(false)
 				app.Suspend(func() {
 					file, err := ioutil.TempFile(os.TempDir(), "glorp")
@@ -351,6 +357,11 @@ func (view *ReplayView) Init(app *tview.Application) {
 	view.response.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlE {
 			if req, ok := view.entries[view.id]; ok {
+				if runtime.GOOS == "windows" {
+					log.Println("[!] Built-in editors are not supported under windows yet")
+					return event
+				}
+
 				app.EnableMouse(false)
 				app.Suspend(func() {
 					file, err := ioutil.TempFile(os.TempDir(), "glorp")
