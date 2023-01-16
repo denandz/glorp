@@ -40,30 +40,11 @@ Usage of ./glorp:
 You'll probably want to specify a CA file, so you can load this into your browser/mobile device/operating system/whatever. The easiest way to spin up your own CA for use in Glorp is as follows:
 
 ```
-doi@buzdovan:~/go/src/glorp$ openssl genrsa -out ca.key 2048
-Generating RSA private key, 2048 bit long modulus (2 primes)
-.....................+++++
-...+++++
-e is 65537 (0x010001)
-doi@buzdovan:~/go/src/glorp$ openssl req -x509 -new -nodes -key ca.key -sha256 -days 1825 -out ca.crt
-You are about to be asked to enter information that will be incorporated
-into your certificate request.
-What you are about to enter is what is called a Distinguished Name or a DN.
-There are quite a few fields but you can leave some blank
-For some fields there will be a default value,
-If you enter '.', the field will be left blank.
------
-Country Name (2 letter code) [AU]:
-State or Province Name (full name) [Some-State]:
-Locality Name (eg, city) []:
-Organization Name (eg, company) [Internet Widgits Pty Ltd]:
-Organizational Unit Name (eg, section) []:
-Common Name (e.g. server FQDN or YOUR name) []: Maximum Flavour CA
-Email Address []:
-
+openssl genrsa -out ca.key 2048
+openssl req -x509 -new -nodes -key ca.key -sha256 -days 1825 -out ca.crt -subj '/CN=GlorpCA'
 ```
 
-You can happily enter-enter-enter your way through most of the dialog above, *but remember to set a common name*. Without a common-name, some platforms like iOS don't play nice. Then, launch glorp:
+*Remember to set a common-name*. Without a common-name, some platforms like iOS don't play nice. Then, launch glorp:
 
 ```
 doi@buzdovan:~/go/src/glorp$ ./glorp -cert ca.crt -key ca.key
