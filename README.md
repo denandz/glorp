@@ -86,6 +86,8 @@ The sitemap shows the various URLs and hosts that have been accessed via the pro
 
 In the proxy page, hit `ctrl-r` on an entry and it will be sent to the replay page, where you can modify the request and re-issue it. If you hit `ctrl-r` in the Replay page, it'll duplicated the current item.
 
+The replays support a history of your sent data. As you modify requests and send them, the history will grow. You can go back and view the previous requests. Editing a previous request that has a response will automatically create a new history entry so you don't lose your old request data.
+
 #### Editing
 
 Highlight the request text box and hit `ctrl-e`. This will open the request in VI and let you edit it. 
@@ -111,6 +113,8 @@ Enabling `Ext. Editor` should show you the filename to edit:
 You can then open that file with any editor and changes will auto-load into Glorp:
 
 ![replayer](./gif/replayer.gif)
+
+You can have multiple external editors open; however, only the one currently focused in glorp will auto-send.
 
 ### Log Page
 
