@@ -571,6 +571,8 @@ func (view *ReplayView) Init(app *tview.Application) {
 		case tcell.KeyCtrlR:
 			if rr, ok := view.replays[view.id]; ok {
 				replayEntry := rr.elements[rr.index].Copy()
+				replayEntry.RawResponse = nil
+				replayEntry.ResponseTime = ""
 				view.AddItem(&replayEntry)
 			}
 
