@@ -115,6 +115,26 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView, logg
 
 				app.EnableMouse(true)
 			}
+		} else if event.Key() == tcell.KeyCtrlU {
+			if entry := view.Logger.GetEntry(id); entry != nil {
+				reader := bytes.NewReader(entry.Request.Raw)
+				req, err := http.ReadRequest(bufio.NewReader(reader))
+
+				if err != nil {
+					log.Printf("[!] Error copy-as-curl %s\n", err)
+					return event
+				}
+
+				curlCmd := reqToCurl(req, entry.Request.URL)
+				if curlCmd != "" {
+					log.Println(curlCmd)
+
+					// Copy and pasting out of the log view is a pain due to word wrapping
+					// spit out the curl CMD on stderr as well so can read it from a
+					// 2> redirected output file
+					fmt.Fprintln(os.Stderr, curlCmd)
+				}
+			}
 		}
 		return event
 	})
