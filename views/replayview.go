@@ -394,7 +394,8 @@ func (view *ReplayView) Init(app *tview.Application) {
 	})
 
 	view.request.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyCtrlE {
+		switch event.Key() {
+		case tcell.KeyCtrlE:
 			if rr, ok := view.replays[view.id]; ok && !view.externalEditor.IsChecked() {
 				if runtime.GOOS == "windows" {
 					log.Println("[!] Built-in editors are not supported under windows yet")
@@ -438,12 +439,19 @@ func (view *ReplayView) Init(app *tview.Application) {
 
 				app.EnableMouse(true)
 			}
-		} else if event.Key() == tcell.KeyCtrlS {
+
+		case tcell.KeyCtrlS:
 			if req, ok := view.replays[view.id]; ok {
 				saveModal(app, view.Layout, req.elements[req.index].RawRequest)
 			}
-		}
 
+		case tcell.KeyLeft:
+			view.backButton.InputHandler()(tcell.NewEventKey(tcell.KeyEnter, 'q', 0), func(p tview.Primitive) {})
+
+		case tcell.KeyRight:
+			view.forwardButton.InputHandler()(tcell.NewEventKey(tcell.KeyEnter, 'q', 0), func(p tview.Primitive) {})
+
+		}
 		return event
 	})
 
