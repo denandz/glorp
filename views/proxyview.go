@@ -115,6 +115,21 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView, logg
 
 				app.EnableMouse(true)
 			}
+		} else if event.Key() == tcell.KeyCtrlU {
+			if entry := view.Logger.GetEntry(id); entry != nil {
+				reader := bytes.NewReader(entry.Request.Raw)
+				req, err := http.ReadRequest(bufio.NewReader(reader))
+
+				if err != nil {
+					log.Printf("[!] Error copy-as-curl %s\n", err)
+					return event
+				}
+
+				curlCmd := reqToCurl(req, entry.Request.URL)
+				if curlCmd != "" {
+					log.Println(curlCmd)
+				}
+			}
 		}
 		return event
 	})
