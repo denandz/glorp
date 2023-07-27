@@ -132,7 +132,10 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView, logg
 					// Copy and pasting out of the log view is a pain due to word wrapping
 					// spit out the curl CMD on stderr as well so can read it from a
 					// 2> redirected output file
-					fmt.Fprintln(os.Stderr, curlCmd)
+					o, _ := os.Stderr.Stat()
+					if (o.Mode() & os.ModeCharDevice) != os.ModeCharDevice {
+						fmt.Fprintln(os.Stderr, curlCmd)
+					}
 				}
 			}
 		}
