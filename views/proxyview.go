@@ -128,6 +128,11 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView, logg
 				curlCmd := reqToCurl(req, entry.Request.URL)
 				if curlCmd != "" {
 					log.Println(curlCmd)
+
+					// Copy and pasting out of the log view is a pain due to word wrapping
+					// spit out the curl CMD on stderr as well so can read it from a
+					// 2> redirected output file
+					fmt.Fprintln(os.Stderr, curlCmd)
 				}
 			}
 		}
