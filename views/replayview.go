@@ -427,8 +427,6 @@ func (view *ReplayView) Init(app *tview.Application) {
 		view.autoSend,
 		view.request,
 		view.goButton,
-		view.backButton,
-		view.forwardButton,
 		view.response,
 	}
 
