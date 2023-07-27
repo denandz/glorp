@@ -142,8 +142,9 @@ func (view *SiteMapView) proxyReceiver(app *tview.Application, channel chan modi
 			if view.treeView != nil && app != nil && elem.NotifType == 0 {
 				entry := view.Logger.GetEntry(elem.ID)
 
-				view.addUrl(entry.Request.URL)
-
+				if entry != nil {
+					view.addUrl(entry.Request.URL)
+				}
 				focus := app.GetFocus()
 				if focus == view.treeView {
 					app.Draw()
