@@ -1,4 +1,4 @@
-FROM golang:buster AS build
+FROM golang:bookworm AS build
 WORKDIR /go/src/glorp/
 COPY . .
 RUN go get -d -v
