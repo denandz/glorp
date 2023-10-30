@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -18,8 +19,9 @@ import (
 
 // Config - struct that holds the proxy config
 type Config struct {
-	Port uint   // port to listen on, default 8080
-	Addr string // ip address to listen on, default 0.0.0.0
+	Port  uint   // port to listen on, default 8080
+	Addr  string // ip address to listen on, default 0.0.0.0
+	Proxy string // downstream proxy to use, optional.
 
 	Cert string // CA certificate
 	Key  string // key
@@ -59,6 +61,14 @@ func StartProxy(logger *modifier.Logger, config *Config) *martian.Proxy {
 		DisableCompression: true,
 	}
 	p.SetRoundTripper(tr)
+
+	if config.Proxy != "" {
+		proxyURL, err := url.Parse(config.Proxy)
+		if err != nil {
+			log.Printf("martian: error parsing upstream proxy URL: %v, skipping proxy\n", err)
+		}
+		p.SetDownstreamProxy(proxyURL)
+	}
 
 	var x509c *x509.Certificate
 	var priv interface{}

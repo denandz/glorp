@@ -23,6 +23,7 @@ type Window func() (title string, content tview.Primitive)
 func main() {
 	// process command line flags
 	addr := flag.String("addr", "", "The bind address, default 0.0.0.0")
+	downstreamProxy := flag.String("proxy", "", "downstream proxy to use in URI format. example: socks5://127.0.0.1:9050. empty means no downstream proxy")
 	cert := flag.String("cert", "", "Path to a CA Certificate")
 	key := flag.String("key", "", "Path to the CA cert's private key")
 	port := flag.Uint("port", 0, "Listen port for the proxy, default 8080")
@@ -44,10 +45,11 @@ func main() {
 
 	// start the Martian proxy
 	config := &proxy.Config{
-		Addr: *addr,
-		Cert: *cert,
-		Key:  *key,
-		Port: *port,
+		Addr:  *addr,
+		Cert:  *cert,
+		Proxy: *downstreamProxy,
+		Key:   *key,
+		Port:  *port,
 	}
 
 	proxychan := make(chan modifier.Notification, 1024)
