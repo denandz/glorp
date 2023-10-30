@@ -8,5 +8,5 @@ require (
 	github.com/google/martian/v3 v3.3.2
 	github.com/rivo/tview v0.0.0-20230226195229-47e7db7885b4
 	github.com/rivo/uniseg v0.4.4 // indirect
-	golang.org/x/net v0.7.0
+	golang.org/x/net v0.17.0 // indirect
 )
