@@ -66,8 +66,9 @@ func StartProxy(logger *modifier.Logger, config *Config) *martian.Proxy {
 		proxyURL, err := url.Parse(config.Proxy)
 		if err != nil {
 			log.Printf("martian: error parsing upstream proxy URL: %v, skipping proxy\n", err)
+		} else {
+			p.SetDownstreamProxy(proxyURL)
 		}
-		p.SetDownstreamProxy(proxyURL)
 	}
 
 	var x509c *x509.Certificate
