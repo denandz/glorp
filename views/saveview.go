@@ -2,7 +2,7 @@ package views
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"sort"
@@ -19,8 +19,22 @@ type SaveRestoreView struct {
 }
 
 type savefile struct {
+	Version      string `json:",omitempty"`
+	Replays      []ReplaySaves
+	Proxyentries []modifier.Entry
+}
+
+// old style save file
+type legacysavefile struct {
 	Replays      []replay.Request
 	Proxyentries []modifier.Entry
+}
+
+// Like ReplayRequests, but we want to store each replay directly in here
+type ReplaySaves struct {
+	ID       string           // The ID as displayed in the table
+	Entries  []replay.Request // an array of replay requests
+	Selected int              // the currently selected request
 }
 
 // GetView - should return a title and the top-level primitive
@@ -72,15 +86,26 @@ func (view *SaveRestoreView) Init(app *tview.Application, replays *ReplayView, p
 }
 
 // Save - spool the replay and proxy state off to a file
-func Save(filename string, replays *ReplayView, proxy *ProxyView) bool {
+func Save(filename string, replayview *ReplayView, proxy *ProxyView) bool {
 	if filename == "" {
 		return false
 	}
 
-	var replayentries []replay.Request
+	//var replayentries []replay.Request
+	var replays []ReplaySaves
 
-	for _, value := range replays.entries {
-		replayentries = append(replayentries, *value)
+	for _, v := range replayview.replays {
+		rs := ReplaySaves{
+			ID:       v.ID,
+			Selected: v.index,
+			Entries:  make([]replay.Request, len(v.elements)),
+		}
+
+		for i, v := range v.elements {
+			rs.Entries[i] = v.Copy()
+		}
+
+		replays = append(replays, rs)
 	}
 
 	var proxyentries []modifier.Entry
@@ -96,7 +121,8 @@ func Save(filename string, replays *ReplayView, proxy *ProxyView) bool {
 	})
 
 	s := &savefile{
-		Replays:      replayentries,
+		Version:      "v1.1",
+		Replays:      replays,
 		Proxyentries: proxyentries,
 	}
 
@@ -108,7 +134,7 @@ func Save(filename string, replays *ReplayView, proxy *ProxyView) bool {
 		return false
 	}
 
-	err = ioutil.WriteFile(filename, jsonData, 0644)
+	err = os.WriteFile(filename, jsonData, 0644)
 	if err != nil {
 		log.Println(err)
 		return false
@@ -118,8 +144,8 @@ func Save(filename string, replays *ReplayView, proxy *ProxyView) bool {
 	return true
 }
 
-// Load - needs to read a json file, clear out the proxy and replay ables and repopulate them
-func Load(filename string, replays *ReplayView, prox *ProxyView, sitemap *SiteMapView) bool {
+// Load - needs to read a json file, clear out the proxy and replay tables and repopulate them
+func Load(filename string, replayview *ReplayView, prox *ProxyView, sitemap *SiteMapView) bool {
 	f, err := os.Open(filename)
 	if err != nil {
 		log.Println(err)
@@ -127,7 +153,7 @@ func Load(filename string, replays *ReplayView, prox *ProxyView, sitemap *SiteMa
 	}
 	defer f.Close()
 
-	fileBytes, err := ioutil.ReadAll(f)
+	fileBytes, err := io.ReadAll(f)
 	if err != nil {
 		log.Println(err)
 		return false
@@ -140,17 +166,58 @@ func Load(filename string, replays *ReplayView, prox *ProxyView, sitemap *SiteMa
 		return false
 	}
 
-	replays.Table.Clear()
+	if s.Version == "v1.1" {
+		replayview.Table.Clear()
 
-	prox.Logger.Reset()
-	for _, v := range s.Proxyentries {
-		prox.Logger.AddEntry(v)
-	}
-	prox.reloadtable()
-	sitemap.reload()
+		prox.Logger.Reset()
+		for _, v := range s.Proxyentries {
+			prox.Logger.AddEntry(v)
+		}
+		prox.reloadtable()
+		sitemap.reload()
 
-	for i := range s.Replays {
-		replays.AddItem(&s.Replays[i])
+		for _, v := range s.Replays {
+			rr := ReplayRequests{
+				ID:       v.ID,
+				index:    v.Selected,
+				elements: make([]*replay.Request, len(v.Entries)),
+			}
+
+			log.Printf("[+] Loaded %d replay entries for id %s", len(v.Entries), v.ID)
+
+			for i, request := range v.Entries {
+				r := request.Copy()
+				rr.elements[i] = &r
+			}
+
+			replayview.LoadReplays(&rr)
+		}
+	} else if s.Version == "" {
+		// old style save file
+		log.Printf("[+] No version number in save file - loading old-style save")
+
+		ls := new(legacysavefile)
+		err = json.Unmarshal(fileBytes, &ls)
+		if err != nil {
+			log.Println(err)
+			return false
+		}
+
+		replayview.Table.Clear()
+
+		prox.Logger.Reset()
+		for _, v := range ls.Proxyentries {
+			prox.Logger.AddEntry(v)
+		}
+		prox.reloadtable()
+		sitemap.reload()
+
+		for i := range ls.Replays {
+			replayview.AddItem(&ls.Replays[i])
+		}
+	} else {
+		log.Printf("[!] Unknown save file version")
+		return false
 	}
 
 	return true

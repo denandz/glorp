@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/denandz/glorp/replay"
@@ -20,12 +21,15 @@ import (
 
 // ReplayView - struct that holds the main replayview elements
 type ReplayView struct {
-	Layout       *tview.Pages   // The main replay view, all others should be underneath Layout
-	Table        *tview.Table   // the main table that lists all the replay items
-	request      *TextPrimitive // http request box
-	response     *TextPrimitive // http response box
-	responseMeta *tview.Table   // metadata for size recieved and time taken
-	goButton     *tview.Button  // send button
+	Layout        *tview.Pages    // The main replay view, all others should be underneath Layout
+	Table         *tview.Table    // the main table that lists all the replay items
+	request       *TextPrimitive  // http request box
+	response      *TextPrimitive  // http response box
+	responseMeta  *tview.Table    // metadata for size recieved and time taken
+	goButton      *tview.Button   // send button
+	backButton    *tview.Button   // back history button
+	forwardButton *tview.Button   // forward history button
+	history       *tview.TextView // indicator for which item in the replay history we're lookingat
 
 	host                *tview.InputField // host field input
 	port                *tview.InputField // port input
@@ -36,22 +40,53 @@ type ReplayView struct {
 
 	id string // id of the currently selected replay item
 
-	entries map[string]*replay.Request // list of request in the replayer - could probably use the row identifier as the key, support renaming
+	replays map[string]*ReplayRequests // list of request in the replayer - could probably use the row identifier as the key, support renaming
 }
 
-// AddItem method - can be called to add a replay.Request entry object
+// ReplayRequests - hold an array of requests for a replay item and the currently selected array ID
+type ReplayRequests struct {
+	ID       string            // The ID as displayed in the table
+	elements []*replay.Request // an array of replay requests
+	index    int               // the currently selected request
+	mu       sync.Mutex
+}
+
+func (view *ReplayView) LoadReplays(rr *ReplayRequests) {
+	newID := rr.ID
+
+	if _, ok := view.replays[newID]; ok {
+		i := 1
+		newID = fmt.Sprintf("%s-%d", rr.ID, i)
+		for _, ok := view.replays[newID]; ok; _, ok = view.replays[newID] {
+			i++
+			newID = fmt.Sprintf("%s-%d", rr.ID, i)
+		}
+	}
+	log.Printf("[+] ReplayView - AddItem - Adding replay item with ID: %s\n", newID)
+	view.replays[newID] = rr
+
+	rows := view.Table.GetRowCount()
+	view.Table.SetCell(rows, 0, tview.NewTableCell(newID))
+}
+
+// AddItem method - create a new replay entry
 func (view *ReplayView) AddItem(r *replay.Request) {
 	newID := r.ID
-	if _, ok := view.entries[newID]; ok {
+	if _, ok := view.replays[newID]; ok {
 		i := 1
 		newID = fmt.Sprintf("%s-%d", r.ID, i)
-		for _, ok := view.entries[newID]; ok; _, ok = view.entries[newID] {
+		for _, ok := view.replays[newID]; ok; _, ok = view.replays[newID] {
 			i++
 			newID = fmt.Sprintf("%s-%d", r.ID, i)
 		}
 	}
 	log.Printf("[+] ReplayView - AddItem - Adding replay item with ID: %s\n", newID)
-	view.entries[newID] = r
+	view.replays[newID] = &ReplayRequests{
+		ID:       newID,
+		elements: make([]*replay.Request, 1),
+		index:    0,
+	}
+	view.replays[newID].elements[0] = r
 	r.ID = newID
 
 	rows := view.Table.GetRowCount()
@@ -59,24 +94,27 @@ func (view *ReplayView) AddItem(r *replay.Request) {
 }
 
 // RenameItem - change the name of an entry
-func (view *ReplayView) RenameItem(r *replay.Request, newName string) {
-	if _, ok := view.entries[newName]; ok {
+func (view *ReplayView) RenameItem(rr *ReplayRequests, newName string) {
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+
+	if _, ok := view.replays[newName]; ok {
 		log.Println("[!] Replay entry with ID " + newName + " already exists")
 		return
 	}
-	if _, ok := view.entries[r.ID]; ok && newName != r.ID {
+	if _, ok := view.replays[rr.ID]; ok && newName != rr.ID {
 		n := view.Table.GetRowCount()
 		for i := 0; i < n; i++ {
-			if view.Table.GetCell(i, 0).Text == r.ID {
-				originalID := r.ID
-				r.ID = newName
+			if view.Table.GetCell(i, 0).Text == rr.ID {
+				originalID := rr.ID
+				rr.ID = newName
 
 				// updating table
-				view.Table.SetCell(i, 0, tview.NewTableCell(r.ID))
+				view.Table.SetCell(i, 0, tview.NewTableCell(rr.ID))
 
 				// updating map
-				view.entries[newName] = r
-				delete(view.entries, originalID)
+				view.replays[newName] = rr
+				delete(view.replays, originalID)
 				break
 			}
 		}
@@ -84,22 +122,52 @@ func (view *ReplayView) RenameItem(r *replay.Request, newName string) {
 }
 
 // DeleteItem - delete an entry
-func (view *ReplayView) DeleteItem(r *replay.Request) {
-	delete(view.entries, r.ID)
+func (view *ReplayView) DeleteItem(rr *ReplayRequests) {
+	delete(view.replays, rr.ID)
 	n := view.Table.GetRowCount()
 	for i := 0; i < n; i++ {
-		if view.Table.GetCell(i, 0).Text == r.ID {
+		if view.Table.GetCell(i, 0).Text == rr.ID {
 			view.Table.RemoveRow(i)
 			break
 		}
 	}
 }
 
+// setRawRequest - sets the raw request bytes. If the replay element currently has
+// a response, duplicate it into a fresh one so we dont lose data
+func updateRawRequest(rr *ReplayRequests, r *replay.Request, data []byte) (req *replay.Request) {
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+
+	if len(r.RawResponse) > 0 {
+		new_request := r.Copy()
+		new_request.RawResponse = nil
+		new_request.ResponseTime = ""
+		new_request.RawRequest = data
+
+		// Copy() ignores these pointers, manually move them across
+		new_request.ExternalFile = r.ExternalFile
+		new_request.Watcher = r.Watcher
+		r.ExternalFile = nil
+		r.Watcher = nil
+
+		rr.elements = append(rr.elements, &new_request)
+		rr.index = len(rr.elements) - 1
+		req = &new_request
+	} else {
+		r.RawRequest = data
+		req = r
+	}
+
+	return
+}
+
 // externalEditor - called when the user toggles the external editor checkbox
 // If enabled, creates a goroutine to monitor an external file that is used
 // to update the request as it's loaded
 func (view *ReplayView) useExternalEditor(app *tview.Application, enable bool) {
-	if req, ok := view.entries[view.id]; ok {
+	if rr, ok := view.replays[view.id]; ok {
+		req := rr.elements[rr.index]
 		if enable {
 			file, err := ioutil.TempFile(os.TempDir(), "glorp")
 			if err != nil {
@@ -150,10 +218,10 @@ func (view *ReplayView) useExternalEditor(app *tview.Application, enable bool) {
 									return
 								}
 
-								req.RawRequest = dat
+								req = updateRawRequest(rr, req, dat)
 								// if we are focused, redraw and fire
 								if view.id == req.ID {
-									view.refreshReplay(req)
+									view.refreshReplay(rr)
 									if view.autoSend.IsChecked() {
 										view.sendRequest(app, req.ID)
 									} else {
@@ -196,7 +264,7 @@ func (view *ReplayView) useExternalEditor(app *tview.Application, enable bool) {
 			req.ExternalFile = nil
 		}
 
-		view.refreshReplay(req)
+		view.refreshReplay(rr)
 	}
 }
 
@@ -207,7 +275,7 @@ func (view *ReplayView) GetView() (title string, content tview.Primitive) {
 
 // Init - Initialization method for the replayer view
 func (view *ReplayView) Init(app *tview.Application) {
-	view.entries = make(map[string]*replay.Request)
+	view.replays = make(map[string]*ReplayRequests)
 	view.responseMeta = tview.NewTable()
 	view.responseMeta.SetCell(0, 0, tview.NewTableCell("Size:").SetTextColor(tcell.ColorMediumPurple))
 	view.responseMeta.SetCell(0, 2, tview.NewTableCell("Time:").SetTextColor(tcell.ColorMediumPurple))
@@ -220,16 +288,45 @@ func (view *ReplayView) Init(app *tview.Application) {
 	view.request = NewTextPrimitive()
 	view.request.SetBorder(true).SetTitle("Request")
 
-	// go and cancel buttons
+	// go and history buttons
+	view.backButton = tview.NewButton("<")
+	view.backButton.SetSelectedFunc(func() {
+		if view.id != "" {
+			view.replays[view.id].mu.Lock()
+			defer view.replays[view.id].mu.Unlock()
+			view.replays[view.id].index--
+			if view.replays[view.id].index < 0 {
+				view.replays[view.id].index = len(view.replays[view.id].elements) - 1
+			}
+			view.refreshReplay(view.replays[view.id])
+		}
+	})
+
+	view.forwardButton = tview.NewButton(">")
+	view.forwardButton.SetSelectedFunc(func() {
+		if view.id != "" {
+			view.replays[view.id].mu.Lock()
+			defer view.replays[view.id].mu.Unlock()
+			view.replays[view.id].index = (view.replays[view.id].index + 1) % len(view.replays[view.id].elements)
+			view.refreshReplay(view.replays[view.id])
+		}
+	})
+
 	view.goButton = tview.NewButton("Go")
+	view.goButton.SetSelectedFunc(func() {
+		view.sendRequest(app, view.id)
+	})
+
+	view.history = tview.NewTextView()
+	view.history.SetTextAlign(tview.AlignCenter)
 
 	// Host, Port, TLS and Auto-content-length fields
 	view.host = tview.NewInputField()
 	view.host.SetLabelColor(tcell.ColorMediumPurple)
 	view.host.SetLabel("Host ")
 	view.host.SetChangedFunc(func(text string) {
-		if req, ok := view.entries[view.id]; ok {
-			req.Host = text
+		if rr, ok := view.replays[view.id]; ok {
+			rr.elements[rr.index].Host = text
 		}
 	})
 
@@ -237,8 +334,8 @@ func (view *ReplayView) Init(app *tview.Application) {
 	view.port.SetLabel("Port ").SetAcceptanceFunc(tview.InputFieldInteger)
 	view.port.SetLabelColor(tcell.ColorMediumPurple)
 	view.port.SetChangedFunc(func(text string) {
-		if req, ok := view.entries[view.id]; ok {
-			req.Port = text
+		if rr, ok := view.replays[view.id]; ok {
+			rr.elements[rr.index].Port = text
 		}
 	})
 
@@ -246,8 +343,8 @@ func (view *ReplayView) Init(app *tview.Application) {
 	view.tls.SetLabelColor(tcell.ColorMediumPurple)
 	view.tls.SetLabel("TLS ")
 	view.tls.SetChangedFunc(func(checked bool) {
-		if req, ok := view.entries[view.id]; ok {
-			req.TLS = checked
+		if rr, ok := view.replays[view.id]; ok {
+			rr.elements[rr.index].TLS = checked
 		}
 	})
 
@@ -269,10 +366,6 @@ func (view *ReplayView) Init(app *tview.Application) {
 	view.response = NewTextPrimitive()
 	view.response.SetBorder(true).SetTitle("Response")
 
-	view.goButton.SetSelectedFunc(func() {
-		view.sendRequest(app, view.id)
-	})
-
 	view.Table = tview.NewTable()
 	view.Table.SetBorders(false).SetSeparator(tview.Borders.Vertical)
 
@@ -282,7 +375,7 @@ func (view *ReplayView) Init(app *tview.Application) {
 	view.Table.SetSelectedFunc(func(row int, column int) {
 		view.id = view.Table.GetCell(row, 0).Text
 		if view.id != "" {
-			view.refreshReplay(view.entries[view.id])
+			view.refreshReplay(view.replays[view.id])
 		}
 	})
 
@@ -296,13 +389,14 @@ func (view *ReplayView) Init(app *tview.Application) {
 
 		view.id = view.Table.GetCell(row, 0).Text
 		if view.id != "" {
-			view.refreshReplay(view.entries[view.id])
+			view.refreshReplay(view.replays[view.id])
 		}
 	})
 
 	view.request.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyCtrlE {
-			if req, ok := view.entries[view.id]; ok && !view.externalEditor.IsChecked() {
+		switch event.Key() {
+		case tcell.KeyCtrlE:
+			if rr, ok := view.replays[view.id]; ok && !view.externalEditor.IsChecked() {
 				if runtime.GOOS == "windows" {
 					log.Println("[!] Built-in editors are not supported under windows yet")
 					return event
@@ -310,6 +404,7 @@ func (view *ReplayView) Init(app *tview.Application) {
 
 				app.EnableMouse(false)
 				app.Suspend(func() {
+					req := rr.elements[rr.index]
 					file, err := ioutil.TempFile(os.TempDir(), "glorp")
 					if err != nil {
 						log.Println(err)
@@ -334,29 +429,36 @@ func (view *ReplayView) Init(app *tview.Application) {
 						return
 					}
 
-					req.RawRequest = dat
-
-					view.refreshReplay(req)
+					//req.entries[req.index].RawRequest = dat
+					updateRawRequest(rr, req, dat)
+					view.refreshReplay(rr)
 					if view.autoSend.IsChecked() {
-						view.sendRequest(app, req.ID)
+						view.sendRequest(app, rr.ID)
 					}
 				})
 
 				app.EnableMouse(true)
 			}
-		} else if event.Key() == tcell.KeyCtrlS {
-			if req, ok := view.entries[view.id]; ok {
-				saveModal(app, view.Layout, req.RawRequest)
-			}
-		}
 
+		case tcell.KeyCtrlS:
+			if req, ok := view.replays[view.id]; ok {
+				saveModal(app, view.Layout, req.elements[req.index].RawRequest)
+			}
+
+		case tcell.KeyLeft:
+			view.backButton.InputHandler()(tcell.NewEventKey(tcell.KeyEnter, 'q', 0), func(p tview.Primitive) {})
+
+		case tcell.KeyRight:
+			view.forwardButton.InputHandler()(tcell.NewEventKey(tcell.KeyEnter, 'q', 0), func(p tview.Primitive) {})
+
+		}
 		return event
 	})
 
 	// ctrl-e on the respose box should drop into read-only VI displaying data
 	view.response.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlE {
-			if req, ok := view.entries[view.id]; ok {
+			if req, ok := view.replays[view.id]; ok {
 				if runtime.GOOS == "windows" {
 					log.Println("[!] Built-in editors are not supported under windows yet")
 					return event
@@ -371,7 +473,7 @@ func (view *ReplayView) Init(app *tview.Application) {
 					}
 					defer os.Remove(file.Name())
 
-					file.Write(req.RawResponse)
+					file.Write(req.elements[req.index].RawResponse)
 					file.Close()
 					cmd := exec.Command("/usr/bin/view", "-b", file.Name())
 					cmd.Stdout = os.Stdout
@@ -385,8 +487,8 @@ func (view *ReplayView) Init(app *tview.Application) {
 				app.EnableMouse(true)
 			}
 		} else if event.Key() == tcell.KeyCtrlS {
-			if req, ok := view.entries[view.id]; ok {
-				saveModal(app, view.Layout, req.RawResponse)
+			if req, ok := view.replays[view.id]; ok {
+				saveModal(app, view.Layout, req.elements[req.index].RawResponse)
 			}
 		}
 
@@ -406,7 +508,10 @@ func (view *ReplayView) Init(app *tview.Application) {
 	requestFlexView.SetDirection(tview.FlexRow)
 	requestFlexView.AddItem(connectionForm, 2, 1, false)
 	requestFlexView.AddItem(view.request, 0, 8, false)
-	requestFlexView.AddItem(view.goButton, 1, 1, false)
+
+	bottomRow := tview.NewFlex()
+	bottomRow.AddItem(view.goButton, 0, 7, false).AddItem(view.backButton, 0, 1, false).AddItem(view.history, 0, 1, false).AddItem(view.forwardButton, 0, 1, false)
+	requestFlexView.AddItem(bottomRow, 1, 1, false)
 
 	responseFlexView := tview.NewFlex()
 	responseFlexView.SetDirection(tview.FlexRow)
@@ -427,6 +532,8 @@ func (view *ReplayView) Init(app *tview.Application) {
 		view.autoSend,
 		view.request,
 		view.goButton,
+		view.backButton,
+		view.forwardButton,
 		view.response,
 	}
 
@@ -451,9 +558,9 @@ func (view *ReplayView) Init(app *tview.Application) {
 			app.SetFocus(focusRing.Value.(tview.Primitive))
 
 		case tcell.KeyCtrlX:
-			if _, ok := view.entries[view.id]; ok {
+			if _, ok := view.replays[view.id]; ok {
 				stringModal(app, view.Layout, "Rename Replay", view.id, func(s string) {
-					if r, ok := view.entries[view.id]; ok {
+					if r, ok := view.replays[view.id]; ok {
 						view.RenameItem(r, s)
 						view.id = r.ID
 					}
@@ -461,7 +568,7 @@ func (view *ReplayView) Init(app *tview.Application) {
 			}
 
 		case tcell.KeyCtrlD:
-			if entry, ok := view.entries[view.id]; ok {
+			if entry, ok := view.replays[view.id]; ok {
 				boolModal(app, view.Layout, "Delete "+entry.ID+"?", func(b bool) {
 					if b {
 						view.DeleteItem(entry)
@@ -470,8 +577,10 @@ func (view *ReplayView) Init(app *tview.Application) {
 			}
 
 		case tcell.KeyCtrlR:
-			if req, ok := view.entries[view.id]; ok {
-				replayEntry := req.Copy()
+			if rr, ok := view.replays[view.id]; ok {
+				replayEntry := rr.elements[rr.index].Copy()
+				replayEntry.RawResponse = nil
+				replayEntry.ResponseTime = ""
 				view.AddItem(&replayEntry)
 			}
 
@@ -489,20 +598,21 @@ func (view *ReplayView) Init(app *tview.Application) {
 }
 
 // refresh the replay view, loading a specific request
-func (view *ReplayView) refreshReplay(r *replay.Request) {
+func (view *ReplayView) refreshReplay(rr *ReplayRequests) {
 	view.request.Clear()
 	view.response.Clear()
 
-	view.host.SetText(r.Host)
-	view.port.SetText(r.Port)
-	view.tls.SetChecked(r.TLS)
+	view.host.SetText(rr.elements[rr.index].Host)
+	view.port.SetText(rr.elements[rr.index].Port)
+	view.tls.SetChecked(rr.elements[rr.index].TLS)
+	view.history.SetText(strconv.Itoa(rr.index + 1))
 
-	fmt.Fprint(view.request, string(r.RawRequest))
-	fmt.Fprint(view.response, string(r.RawResponse))
+	fmt.Fprint(view.request, string(rr.elements[rr.index].RawRequest))
+	fmt.Fprint(view.response, string(rr.elements[rr.index].RawResponse))
 
 	// if an external file exists, show it in the request title
-	if r.ExternalFile != nil {
-		view.request.SetTitle("Request - File " + r.ExternalFile.Name())
+	if rr.elements[rr.index].ExternalFile != nil {
+		view.request.SetTitle("Request - File " + rr.elements[rr.index].ExternalFile.Name())
 		view.request.SetBorderColor(tcell.ColorDarkSeaGreen)
 		view.externalEditor.SetChecked(true)
 	} else {
@@ -519,13 +629,25 @@ func (view *ReplayView) refreshReplay(r *replay.Request) {
 
 	view.response.ScrollToBeginning()
 
-	view.responseMeta.SetCell(0, 1, tview.NewTableCell(strconv.Itoa(len(r.RawResponse))))
-	view.responseMeta.SetCell(0, 3, tview.NewTableCell(r.ResponseTime))
+	view.responseMeta.SetCell(0, 1, tview.NewTableCell(strconv.Itoa(len(rr.elements[rr.index].RawResponse))))
+	view.responseMeta.SetCell(0, 3, tview.NewTableCell(rr.elements[rr.index].ResponseTime))
 }
 
-// Send the request
+// Send the request - save the response as a new entry
 func (view *ReplayView) sendRequest(app *tview.Application, id string) {
-	if req, ok := view.entries[id]; ok {
+	if rr, ok := view.replays[id]; ok {
+		rr.mu.Lock()
+		defer rr.mu.Unlock()
+
+		if len(rr.elements[rr.index].RawResponse) > 0 {
+			// A response already exists, create a new item to track history
+			r := rr.elements[rr.index].Copy()
+			rr.elements = append(rr.elements, &r)
+			rr.index = len(rr.elements) - 1 // set the selected item to the last entry
+		}
+
+		req := rr.elements[rr.index]
+
 		view.response.Clear()
 
 		if view.updateContentLength.IsChecked() {
@@ -536,9 +658,9 @@ func (view *ReplayView) sendRequest(app *tview.Application, id string) {
 
 		go func() {
 			size, err := req.SendRequest()
-			if req == view.entries[view.id] {
+			if req == view.replays[view.id].elements[view.replays[view.id].index] {
 				if size > 0 {
-					view.refreshReplay(req)
+					view.refreshReplay(rr)
 				} else {
 					view.responseMeta.SetCell(0, 1, tview.NewTableCell("ERROR"))
 					view.responseMeta.SetCell(0, 3, tview.NewTableCell("ERROR"))
