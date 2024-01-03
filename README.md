@@ -31,6 +31,8 @@ Usage of ./glorp:
     	Path to the CA cert's private key
   -port uint
     	Listen port for the proxy, default 8080
+  -proxy string
+    	downstream proxy to use in URI format. example: socks5://127.0.0.1:9050. empty means no downstream proxy
   -v int
     	log level
 ```
