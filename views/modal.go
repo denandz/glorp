@@ -110,6 +110,12 @@ func stringModal(app *tview.Application, page *tview.Pages, message string, defa
 			}
 		}
 
+		if event.Key() == tcell.KeyEnter {
+			page.HidePage("stringmodal")
+			cb(textInput.GetText())
+			page.RemovePage("stringmodal")
+		}
+
 		return event
 	})
 
