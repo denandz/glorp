@@ -115,6 +115,7 @@ func (view *SiteMapView) addUrl(u string) {
 	url, err := url.Parse(u)
 	if err != nil {
 		log.Printf("[!] Error SiteMapView - addUrl - url parse %s\n", err)
+		return
 	}
 
 	exists := false
