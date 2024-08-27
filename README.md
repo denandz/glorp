@@ -10,6 +10,12 @@ The idea is to provide a CLI based tool for when you wanna-look-at-this-thing-re
 
 Install can be done with `git clone` and `go build/install`, or by using one of the binaries available on the releases page.
 
+If you'd like to patch the `net/http` header casing problems, you can enable the included overlay to overwrite the relevant part of `net/http`. Note, this has been tested on `go1.22.0` on Linux:
+
+```
+go build -overlay overlay.json
+```
+
 Alternatively, to run under docker, clone this repository and:
 
 ```
