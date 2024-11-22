@@ -1,0 +1,3 @@
+{"Replace":{
+  "/usr/local/go/src/net/textproto/reader.go": "overlays/reader.22.go"
+}}

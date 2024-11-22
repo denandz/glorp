@@ -13,8 +13,10 @@ Install can be done with `git clone` and `go build/install`, or by using one of 
 If you'd like to patch the `net/http` header casing problems, you can enable the included overlay to overwrite the relevant part of `net/http`. Note, this has been tested on `go1.22.0` on Linux:
 
 ```
-go build -overlay overlay.json
+go build -overlay overlay.22.json
 ```
+
+If you're on golang `1.23`, use `overlay.23.json` instead.
 
 Alternatively, to run under docker, clone this repository and:
 
