@@ -1,8 +1,8 @@
-FROM golang:1.22-bookworm AS build
+FROM golang:1.24-bookworm AS build
 WORKDIR /go/src/glorp/
 COPY . .
 RUN go get -v
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o glorp -overlay overlay.22.json .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o glorp -overlay overlay.23.json .
 
 FROM alpine:latest
 RUN apk update
