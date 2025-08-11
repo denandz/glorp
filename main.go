@@ -3,13 +3,13 @@
 package main
 
 import (
-        "net/url"
-        "strings"
 	"flag"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/denandz/glorp/modifier"
 	"github.com/denandz/glorp/proxy"
@@ -32,16 +32,16 @@ func main() {
 	help := flag.Bool("help", false, "Show help")
 	flag.Parse()
 
-        if (*downstreamProxy !="") {
-           u, _:= url.Parse(*downstreamProxy)
-           if (u.Scheme != "http" && u.Scheme != "https" && u.Scheme != "socks5") {
-                log.Fatal("Bad Proxy Scheme: Proxy must use URI format. example: socks5://127.0.0.1:9050.")
-        }
-        port := strings.Split(u.Host, ":")
-        if (len(port) < 2) {
-                log.Fatal("Missing Port Number: Proxy URI must include port number. example: socks5://127.0.0.1:9050.")
-           }
-         }
+	if *downstreamProxy != "" {
+		u, _ := url.Parse(*downstreamProxy)
+		if u.Scheme != "http" && u.Scheme != "https" && u.Scheme != "socks5" {
+			log.Fatal("Bad Proxy Scheme: Proxy must use URI format. example: socks5://127.0.0.1:9050.")
+		}
+		port := strings.Split(u.Host, ":")
+		if len(port) < 2 {
+			log.Fatal("Missing Port Number: Proxy URI must include port number. example: socks5://127.0.0.1:9050.")
+		}
+	}
 
 	if *help ||
 		(*cert == "" && *key != "") ||
