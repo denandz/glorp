@@ -1,7 +1,6 @@
 package views
 
 import (
-	"io/ioutil"
 	"log"
 	"os"
 
@@ -130,7 +129,7 @@ func saveModal(app *tview.Application, page *tview.Pages, buf []byte) {
 	saveButton := tview.NewButton("OK").SetSelectedFunc(func() {
 		_, err := os.Stat(filenameInput.GetText())
 		if os.IsNotExist(err) {
-			err = ioutil.WriteFile(filenameInput.GetText(), buf, 0644)
+			err = os.WriteFile(filenameInput.GetText(), buf, 0644)
 			if err != nil {
 				log.Println(err)
 			}

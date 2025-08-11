@@ -3,7 +3,6 @@ package views
 import (
 	"container/ring"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -169,7 +168,7 @@ func (view *ReplayView) useExternalEditor(app *tview.Application, enable bool) {
 	if rr, ok := view.replays[view.id]; ok {
 		req := rr.elements[rr.index]
 		if enable {
-			file, err := ioutil.TempFile(os.TempDir(), "glorp")
+			file, err := os.CreateTemp(os.TempDir(), "glorp")
 			if err != nil {
 				log.Printf("[!] ReplayView - useExternalEditor - tempfile: %s\n", err)
 				return
@@ -405,7 +404,7 @@ func (view *ReplayView) Init(app *tview.Application) {
 				app.EnableMouse(false)
 				app.Suspend(func() {
 					req := rr.elements[rr.index]
-					file, err := ioutil.TempFile(os.TempDir(), "glorp")
+					file, err := os.CreateTemp(os.TempDir(), "glorp")
 					if err != nil {
 						log.Println(err)
 						return
@@ -423,7 +422,7 @@ func (view *ReplayView) Init(app *tview.Application) {
 					}
 
 					// load the tmp file back into the request buffer
-					dat, err := ioutil.ReadFile(file.Name())
+					dat, err := os.ReadFile(file.Name())
 					if err != nil {
 						log.Println(err)
 						return
@@ -466,7 +465,7 @@ func (view *ReplayView) Init(app *tview.Application) {
 
 				app.EnableMouse(false)
 				app.Suspend(func() {
-					file, err := ioutil.TempFile(os.TempDir(), "glorp")
+					file, err := os.CreateTemp(os.TempDir(), "glorp")
 					if err != nil {
 						log.Println(err)
 						return

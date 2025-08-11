@@ -3,7 +3,7 @@ package views
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -34,7 +34,7 @@ func reqToCurl(req *http.Request, url string) string {
 			return ""
 		}
 		// reset body
-		req.Body = ioutil.NopCloser(bytes.NewBuffer(buf.Bytes()))
+		req.Body = io.NopCloser(bytes.NewBuffer(buf.Bytes()))
 
 		if len(buf.String()) > 0 {
 			bodyEscaped := fmt.Sprintf("$'%s'", hexEscapeString(buf.String()))

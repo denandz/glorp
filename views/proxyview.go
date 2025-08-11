@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"container/ring"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -95,7 +95,7 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView, logg
 
 				app.EnableMouse(false)
 				app.Suspend(func() {
-					file, err := ioutil.TempFile(os.TempDir(), "glorp")
+					file, err := os.CreateTemp(os.TempDir(), "glorp")
 					if err != nil {
 						log.Println(err)
 						return
@@ -159,7 +159,7 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView, logg
 
 				app.EnableMouse(false)
 				app.Suspend(func() {
-					file, err := ioutil.TempFile(os.TempDir(), "glorp")
+					file, err := os.CreateTemp(os.TempDir(), "glorp")
 					if err != nil {
 						log.Println(err)
 						return
@@ -196,7 +196,7 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView, logg
 	saveButton := tview.NewButton("OK").SetSelectedFunc(func() {
 		_, err := os.Stat(filenameInput.GetText())
 		if os.IsNotExist(err) {
-			err = ioutil.WriteFile(filenameInput.GetText(), saveBuffer, 0644)
+			err = os.WriteFile(filenameInput.GetText(), saveBuffer, 0644)
 			if err != nil {
 				log.Println(err)
 			}
@@ -539,7 +539,7 @@ func (view *ProxyView) writeRequest(r *modifier.Request) {
 		return
 	}
 
-	body, err := ioutil.ReadAll(br)
+	body, err := io.ReadAll(br)
 	if err != nil {
 		log.Printf("[!] Error writeRequest %s\n", err)
 		return
@@ -584,9 +584,9 @@ func (view *ProxyView) writeResponse(e *modifier.Entry) {
 		return
 	}
 
-	body, err := ioutil.ReadAll(br)
+	body, err := io.ReadAll(br)
 	if err != nil {
-		log.Printf("[!] Error writeResponse - ioutil.ReadAll %s\n", err)
+		log.Printf("[!] Error writeResponse - io.ReadAll %s\n", err)
 		return
 	}
 
