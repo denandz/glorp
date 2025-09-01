@@ -556,13 +556,20 @@ func (view *ProxyView) writeResponse(e *modifier.Entry) {
 		return
 	}
 
-	// if the response greater than 5 megabytes, just display the headers
-	if len(e.Response.Raw) > 5*1024*1024 {
-		fmt.Fprint(view.responseBox, string(e.Response.Raw[0:len(e.Response.Raw)-int(e.Response.BodySize)]))
-		fmt.Fprint(view.responseBox, "\r\n\r\nResponse too large to display - Replay or CTRL-S")
-		fmt.Fprint(view.responseBox, "\u2800")
-		return
-	}
+    // if the response greater than 5 megabytes, just display the headers
+    if len(e.Response.Raw) > 5*1024*1024 {
+        crlf := strings.Index(string(e.Response.Raw), "\r\n\r\n")
+
+        if crlf != -1 {
+            fmt.Fprint(view.responseBox, string(e.Response.Raw[0:crlf]))
+        } else {
+            fmt.Fprint(view.responseBox, string(e.Response.Raw[0:8192]))
+        }
+
+        fmt.Fprint(view.responseBox, "\r\n\r\nResponse too large to display - Replay, CTRL-E or CTRL-S")
+        fmt.Fprint(view.responseBox, "\u2800")
+        return
+    }
 
 	reader := bytes.NewReader(e.Response.Raw)
 	resp, err := http.ReadResponse(bufio.NewReader(reader), nil)
