@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/denandz/glorp/modifier"
