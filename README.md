@@ -51,7 +51,7 @@ You'll probably want to specify a CA file, so you can load this into your browse
 
 ```
 openssl genrsa -out ca.key 2048
-openssl req -x509 -new -nodes -key ca.key -sha256 -days 1825 -out ca.crt -subj '/CN=GlorpCA'
+openssl req -x509 -new -nodes -key ca.key -sha256 -days 1825 -out ca.crt -subj '/CN=GlorpCA' -addext "keyUsage=critical,digitalSignature,keyCertSign,cRLSign"
 ```
 
 *Remember to set a common-name*. Without a common-name, some platforms like iOS don't play nice. Then, launch glorp:
