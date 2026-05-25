@@ -653,7 +653,7 @@ func (view *ReplayView) sendRequest(app *tview.Application, id string) {
 			req.UpdateContentLength()
 		}
 
-		c := false
+		done := make(chan struct{})
 
 		go func() {
 			size, err := req.SendRequest()
@@ -668,22 +668,28 @@ func (view *ReplayView) sendRequest(app *tview.Application, id string) {
 				}
 				app.Draw()
 			}
-			c = true
+			close(done)
 		}()
 
 		spindex := 0
 		spinner := []string{"|", "/", "-", "\\"}
 		go func() {
-			for !c {
-				view.goButton.SetLabel("Go " + spinner[spindex])
-				app.Draw()
-				spindex++
-				if spindex == 3 {
-					spindex = 0
+			for {
+				select {
+				case <-done:
+					view.goButton.SetLabel("Go")
+					return
+
+				default:
+					view.goButton.SetLabel("Go " + spinner[spindex])
+					app.Draw()
+					spindex++
+					if spindex == 3 {
+						spindex = 0
+					}
+					time.Sleep(100 * time.Millisecond)
 				}
-				time.Sleep(100 * time.Millisecond)
 			}
-			view.goButton.SetLabel("Go")
 		}()
 	}
 }
