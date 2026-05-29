@@ -48,7 +48,7 @@ func newTabCapture(ctx context.Context, cancel context.CancelFunc, logger *modif
 }
 
 func (t *tabCapture) generateID() string {
-	buf := make([]byte, 16)
+	buf := make([]byte, 8)
 	rand.Read(buf)
 	return hex.EncodeToString(buf)
 }
