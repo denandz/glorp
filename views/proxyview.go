@@ -252,7 +252,7 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView, logg
 		if entry := view.Logger.GetEntry(id); entry != nil {
 			if entry.Request != nil {
 
-				view.writeRequest(entry.Request)
+				view.writeRequest(entry)
 				view.requestBox.ScrollToBeginning()
 			}
 			if entry.Response != nil {
@@ -519,8 +519,8 @@ func (view *ProxyView) reloadtable() {
 	}
 }
 
-func (view *ProxyView) writeRequest(r *modifier.Request) {
-	reader := bytes.NewReader(r.Raw)
+func (view *ProxyView) writeRequest(e *modifier.Entry) {
+	reader := bytes.NewReader(e.Request.Raw)
 	req, err := http.ReadRequest(bufio.NewReader(reader))
 
 	if err != nil {
@@ -528,26 +528,32 @@ func (view *ProxyView) writeRequest(r *modifier.Request) {
 		return
 	}
 
-	mv := messageview.New()
-	if err := mv.SnapshotRequest(req); err != nil {
-		log.Printf("[!] Error writeRequest %s\n", err)
-		return
-	}
+	switch e.Source {
+	case modifier.SourceProxy:
+		mv := messageview.New()
+		if err := mv.SnapshotRequest(req); err != nil {
+			log.Printf("[!] Error writeRequest %s\n", err)
+			return
+		}
 
-	br, err := mv.Reader(messageview.Decode())
-	if err != nil {
-		log.Printf("[!] Error writeRequest %s\n", err)
-		return
-	}
+		br, err := mv.Reader(messageview.Decode())
+		if err != nil {
+			log.Printf("[!] Error writeRequest %s\n", err)
+			return
+		}
 
-	body, err := io.ReadAll(br)
-	if err != nil {
-		log.Printf("[!] Error writeRequest %s\n", err)
-		return
-	}
+		body, err := io.ReadAll(br)
+		if err != nil {
+			log.Printf("[!] Error writeRequest %s\n", err)
+			return
+		}
 
-	fmt.Fprint(view.requestBox, string(body))
-	fmt.Fprint(view.requestBox, "\u2800")
+		fmt.Fprint(view.requestBox, string(body))
+		fmt.Fprint(view.requestBox, "\u2800")
+	case modifier.SourceBrowser:
+		fmt.Fprintf(view.requestBox, string(e.Request.Raw))
+		fmt.Fprint(view.requestBox, "\u2800")
+	}
 }
 
 func (view *ProxyView) writeResponse(e *modifier.Entry) {
