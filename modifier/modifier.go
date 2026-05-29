@@ -27,6 +27,15 @@ type Notification struct {
 	NotifType int // 0 == request, 1 == response
 }
 
+// SourceType is the orign of the entry. Proxy, browser, etc
+type SourceType string
+
+const (
+	SourceProxy SourceType = "proxy"
+	SourceBrowser SourceType = "browser"
+)
+
+
 // Entries stores all the Entry items
 type Entries map[string]*Entry
 
@@ -42,6 +51,8 @@ type Entry struct {
 	Request *Request `json:"request"`
 	// Response contains the detailed information about the response.
 	Response *Response `json:"response,omitempty"`
+	// Source shows where the entry originated from. Proxy, browser, etc
+	Source	SourceType `json:"sourcetype,omitempty"`
 }
 
 // Request holds data about an individual HTTP request.
@@ -106,7 +117,7 @@ func (l *Logger) ModifyRequest(req *http.Request) error {
 
 	id := ctx.ID()
 
-	e := l.RecordRequest(id, req)
+	e := l.RecordRequest(id, req, SourceProxy)
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -119,7 +130,7 @@ func (l *Logger) ModifyRequest(req *http.Request) error {
 
 // RecordRequest logs the HTTP request with the given ID. The ID should be unique
 // per request/response pair.
-func (l *Logger) RecordRequest(id string, req *http.Request) error {
+func (l *Logger) RecordRequest(id string, req *http.Request, source SourceType) error {
 	hreq, err := NewRequest(req)
 	if err != nil {
 		return err
@@ -129,6 +140,7 @@ func (l *Logger) RecordRequest(id string, req *http.Request) error {
 		ID:              id,
 		StartedDateTime: time.Now().UTC(),
 		Request:         hreq,
+		Source:		 source,
 	}
 
 	l.mu.Lock()
@@ -243,10 +255,44 @@ func (l *Logger) AddEntry(e Entry) {
 	}
 }
 
+// InjectRequest logs a request from an external source (browser CDP capture)
+func (l *Logger) InjectRequest(id string, req *http.Request, source SourceType) error {
+	if req.Method == http.MethodConnect {
+		return nil
+	}
+	err := l.RecordRequest(id, req, source)
+	if err != nil {
+		return err
+	}
+	l.proxynotificationchan <- Notification{id, 0}
+	l.sitemapnotificationchan <- Notification{id, 0}
+	return nil
+}
+
+// InjectResponse logs a response from an external source and sends proxy notifications.
+func (l *Logger) InjectResponse(id string, res *http.Response) error {
+	err := l.RecordResponse(id, res)
+	if err != nil {
+		return err
+	}
+	l.proxynotificationchan <- Notification{id, 1}
+	return nil
+}
+
 // Reset clears the in-memory log of entries.
 func (l *Logger) Reset() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	l.entries = make(map[string]*Entry)
+}
+
+// Lock the mutex
+func (l *Logger) Lock() {
+	l.mu.Lock()
+}
+
+// Unlock the mutex
+func (l *Logger) Unlock() {
+	l.mu.Unlock()
 }
