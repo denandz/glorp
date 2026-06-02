@@ -231,7 +231,7 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView, logg
 	// hacky way to deal with item focus...
 	items := []tview.Primitive{view.Table, view.requestBox, view.responseBox}
 	focusRing := ring.New(len(items))
-	for i := 0; i < len(items); i++ {
+	for i := range items {
 		focusRing.Value = items[i]
 		focusRing = focusRing.Next()
 	}
@@ -252,7 +252,7 @@ func (view *ProxyView) Init(app *tview.Application, replayview *ReplayView, logg
 		if entry := view.Logger.GetEntry(id); entry != nil {
 			if entry.Request != nil {
 
-				view.writeRequest(entry.Request)
+				view.writeRequest(entry)
 				view.requestBox.ScrollToBeginning()
 			}
 			if entry.Response != nil {
@@ -519,8 +519,8 @@ func (view *ProxyView) reloadtable() {
 	}
 }
 
-func (view *ProxyView) writeRequest(r *modifier.Request) {
-	reader := bytes.NewReader(r.Raw)
+func (view *ProxyView) writeRequest(e *modifier.Entry) {
+	reader := bytes.NewReader(e.Request.Raw)
 	req, err := http.ReadRequest(bufio.NewReader(reader))
 
 	if err != nil {
@@ -528,26 +528,32 @@ func (view *ProxyView) writeRequest(r *modifier.Request) {
 		return
 	}
 
-	mv := messageview.New()
-	if err := mv.SnapshotRequest(req); err != nil {
-		log.Printf("[!] Error writeRequest %s\n", err)
-		return
-	}
+	switch e.Source {
+	case modifier.SourceProxy:
+		mv := messageview.New()
+		if err := mv.SnapshotRequest(req); err != nil {
+			log.Printf("[!] Error writeRequest %s\n", err)
+			return
+		}
 
-	br, err := mv.Reader(messageview.Decode())
-	if err != nil {
-		log.Printf("[!] Error writeRequest %s\n", err)
-		return
-	}
+		br, err := mv.Reader(messageview.Decode())
+		if err != nil {
+			log.Printf("[!] Error writeRequest %s\n", err)
+			return
+		}
 
-	body, err := io.ReadAll(br)
-	if err != nil {
-		log.Printf("[!] Error writeRequest %s\n", err)
-		return
-	}
+		body, err := io.ReadAll(br)
+		if err != nil {
+			log.Printf("[!] Error writeRequest %s\n", err)
+			return
+		}
 
-	fmt.Fprint(view.requestBox, string(body))
-	fmt.Fprint(view.requestBox, "\u2800")
+		fmt.Fprint(view.requestBox, string(body))
+		fmt.Fprint(view.requestBox, "\u2800")
+	case modifier.SourceBrowser:
+		fmt.Fprintf(view.requestBox, string(e.Request.Raw))
+		fmt.Fprint(view.requestBox, "\u2800")
+	}
 }
 
 func (view *ProxyView) writeResponse(e *modifier.Entry) {
@@ -557,47 +563,53 @@ func (view *ProxyView) writeResponse(e *modifier.Entry) {
 		return
 	}
 
-    // if the response greater than 5 megabytes, just display the headers
-    if len(e.Response.Raw) > 5*1024*1024 {
-        crlf := strings.Index(string(e.Response.Raw), "\r\n\r\n")
+	// if the response greater than 5 megabytes, just display the headers
+	if len(e.Response.Raw) > 5*1024*1024 {
+		crlf := strings.Index(string(e.Response.Raw), "\r\n\r\n")
 
-        if crlf != -1 {
-            fmt.Fprint(view.responseBox, string(e.Response.Raw[0:crlf]))
-        } else {
-            fmt.Fprint(view.responseBox, string(e.Response.Raw[0:8192]))
-        }
+		if crlf != -1 {
+			fmt.Fprint(view.responseBox, string(e.Response.Raw[0:crlf]))
+		} else {
+			fmt.Fprint(view.responseBox, string(e.Response.Raw[0:8192]))
+		}
 
-        fmt.Fprint(view.responseBox, "\r\n\r\nResponse too large to display - Replay, CTRL-E or CTRL-S")
-        fmt.Fprint(view.responseBox, "\u2800")
-        return
-    }
-
-	reader := bytes.NewReader(e.Response.Raw)
-	resp, err := http.ReadResponse(bufio.NewReader(reader), nil)
-
-	if err != nil {
-		log.Printf("[!] Error writeResponse - http.ReadResponse %s\n", err)
+		fmt.Fprint(view.responseBox, "\r\n\r\nResponse too large to display - Replay, CTRL-E or CTRL-S")
+		fmt.Fprint(view.responseBox, "\u2800")
 		return
 	}
 
-	mv := messageview.New()
-	if err := mv.SnapshotResponse(resp); err != nil {
-		log.Printf("[!] Error writeResponse - mv.SnapshotResponse %s\n", err)
-		return
-	}
+	switch e.Source {
+	case modifier.SourceProxy:
+		reader := bytes.NewReader(e.Response.Raw)
+		resp, err := http.ReadResponse(bufio.NewReader(reader), nil)
 
-	br, err := mv.Reader(messageview.Decode())
-	if err != nil {
-		log.Printf("[!] Error writeResponse - mv.Reader %s\n", err)
-		return
-	}
+		if err != nil {
+			log.Printf("[!] Error writeResponse - http.ReadResponse %s\n", err)
+			return
+		}
 
-	body, err := io.ReadAll(br)
-	if err != nil {
-		log.Printf("[!] Error writeResponse - io.ReadAll %s\n", err)
-		return
-	}
+		mv := messageview.New()
+		if err := mv.SnapshotResponse(resp); err != nil {
+			log.Printf("[!] Error writeResponse - mv.SnapshotResponse %s\n", err)
+			return
+		}
 
-	fmt.Fprint(view.responseBox, string(body))
-	fmt.Fprint(view.responseBox, "\u2800")
+		br, err := mv.Reader(messageview.Decode())
+		if err != nil {
+			log.Printf("[!] Error writeResponse - mv.Reader %s\n", err)
+			return
+		}
+
+		body, err := io.ReadAll(br)
+		if err != nil {
+			log.Printf("[!] Error writeResponse - io.ReadAll %s\n", err)
+			return
+		}
+
+		fmt.Fprint(view.responseBox, string(body))
+		fmt.Fprint(view.responseBox, "\u2800")
+	case modifier.SourceBrowser:
+		fmt.Fprintf(view.responseBox, string(e.Response.Raw))
+		fmt.Fprint(view.responseBox, "\u2800")
+	}
 }

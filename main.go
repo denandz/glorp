@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/denandz/glorp/browser"
 	"github.com/denandz/glorp/modifier"
 	"github.com/denandz/glorp/proxy"
 	"github.com/denandz/glorp/views"
@@ -29,6 +30,7 @@ func main() {
 	cert := flag.String("cert", "", "Path to a CA Certificate")
 	key := flag.String("key", "", "Path to the CA cert's private key")
 	port := flag.Uint("port", 0, "Listen port for the proxy, default 8080")
+	cdpURL := flag.String("cdp", "", "Connect to a Chrome DevTools Protocol WebSocket URL (e.g., ws://127.0.0.1:9222/devtools/browser/...)")
 	help := flag.Bool("help", false, "Show help")
 	flag.Parse()
 
@@ -69,6 +71,19 @@ func main() {
 	sitemapchan := make(chan modifier.Notification, 1024)
 	logger := modifier.NewLogger(app, proxychan, sitemapchan)
 	proxy.StartProxy(logger, config)
+
+	// start the browser CDP capture if requested
+	if *cdpURL != "" {
+		browserCap := browser.NewCapture(logger)
+
+		log.Printf("[+] Connecting to browser at %s\n", *cdpURL)
+		err := browserCap.ConnectWS(*cdpURL)
+		if err != nil {
+			log.Fatalf("[!] Browser CDP connect: %s\n", err)
+		}
+		browserCap.Start()
+		log.Println("[+] Browser CDP capture started")
+	}
 
 	// create the main proxy window
 	proxyview := new(views.ProxyView)
