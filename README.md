@@ -31,6 +31,8 @@ docker run -p 8080:8080 --rm -it glorp
 Usage of ./glorp:
   -addr string
     	The bind address, default 0.0.0.0
+  -cdp string
+    	Connect to a Chrome DevTools Protocol WebSocket URL (e.g., ws://127.0.0.1:9222/devtools/browser/...)
   -cert string
     	Path to a CA Certificate
   -help
@@ -41,8 +43,6 @@ Usage of ./glorp:
     	Listen port for the proxy, default 8080
   -proxy string
     	downstream proxy to use in URI format. example: socks5://127.0.0.1:9050. empty means no downstream proxy
-  -v int
-    	log level
 ```
 
 ### Using a custom CA
