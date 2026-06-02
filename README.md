@@ -192,3 +192,27 @@ RUN cd /opt/squid && make -j4 && make install
 RUN chown nobody /usr/local/squid/var/logs/
 RUN /usr/local/squid/libexec/security_file_certgen -c -s /var/lib/ssl_db -M 4MB
 ```
+
+## Chrome Developer Tools Protocol Support
+
+Glorp supports the chrome developer tools websocket protocol via the `chromedp` library. The proxy view entries will be built by analysing requests and responses the browser sends. This means you can see HTTP1.1/HTTP2/HTTP3 messages your browser is sending without connecting to a real proxy server. Since there is no proxy server, there are some additional benefits.
+
+1. You don't need to install a custom CA
+2. You are not intercepting requests at the network layer, so sites that care about JA4 fingerprinting and such will just see a Chromium browser.
+3. You can tunnel the developer tools port around, and collect request/response history for remote browsers.
+
+You can start chromium with the remote debugging enabled with a command like:
+
+```
+chromium-browser --remote-debugging-port=9222
+
+DevTools listening on ws://127.0.0.1:9222/devtools/browser/539b43ad-ef6e-4a66-94ae-1636936871cf
+```
+
+Then launch glorp with the `-cdp` flag:
+
+```
+glorp -cdp ws://127.0.0.1:9222/devtools/browser/539b43ad-ef6e-4a66-94ae-1636936871cf
+```
+
+All tabs and windows for the connected browser are logged.
