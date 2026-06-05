@@ -1,96 +1,222 @@
 package replay
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"log"
-	"net"
+	"net/http"
+	"net/http/httputil"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/imroc/req/v3"
 )
+
+// Protocol constants for the Protocol field.
+const (
+	ProtoHTTP1 = "HTTP/1.1"
+	ProtoHTTP2 = "HTTP/2"
+	ProtoHTTP3 = "HTTP/3"
+	ProtoAuto  = "Auto"
+)
+
+// Protocols is the ordered list of selectable protocol options.
+var Protocols = []string{ProtoAuto, ProtoHTTP1, ProtoHTTP2, ProtoHTTP3}
+
+// Fingerprint constants for the Fingerprint field.
+// "Impersonate" options spoof both TLS and HTTP/2 frame characteristics.
+// "TLS:" options spoof only the TLS ClientHello.
+const (
+	FingerprintNone         = ""
+	FingerprintChrome       = "Impersonate: Chrome"
+	FingerprintFirefox      = "Impersonate: Firefox"
+	FingerprintSafari       = "Impersonate: Safari"
+	FingerprintTLSChrome    = "TLS: Chrome"
+	FingerprintTLSFirefox   = "TLS: Firefox"
+	FingerprintTLSEdge      = "TLS: Edge"
+	FingerprintTLSSafari    = "TLS: Safari"
+	FingerprintTLSIOS       = "TLS: iOS"
+	FingerprintTLSAndroid   = "TLS: Android"
+	FingerprintTLSRandomized = "TLS: Randomized"
+)
+
+// Fingerprints is the ordered list of selectable fingerprint options shown in the UI.
+// The empty string entry represents "no fingerprint spoofing".
+var Fingerprints = []string{
+	FingerprintNone,
+	FingerprintChrome,
+	FingerprintFirefox,
+	FingerprintSafari,
+	FingerprintTLSChrome,
+	FingerprintTLSFirefox,
+	FingerprintTLSEdge,
+	FingerprintTLSSafari,
+	FingerprintTLSIOS,
+	FingerprintTLSAndroid,
+	FingerprintTLSRandomized,
+}
 
 // Request - main struct that holds replay request/response data
 type Request struct {
-	ID           string // The ID as displayed in the table
-	Host         string // the destination host
-	Port         string // the destination port
-	TLS          bool   // does the destination expect TLS
-	RawRequest   []byte // the raw body
-	RawResponse  []byte // the raw body
-	ResponseTime string // the time it took to recieve the response
+	ID          string        // The ID as displayed in the table
+	Host        string        // the destination host
+	Port        string        // the destination port
+	TLS         bool          // does the destination expect TLS
+	Protocol    string        // HTTP protocol version: HTTP/1.1, HTTP/2, HTTP/3
+	Fingerprint string        // TLS/HTTP fingerprint impersonation (see Fingerprints slice)
+	ProxyURL    string        // downstream proxy URL to use when sending (e.g. http://127.0.0.1:8080)
+	RawRequest  []byte // the request to send
+	RawResponse []byte        // raw HTTP response bytes
+	ResponseTime string       // the time it took to receive the response
 
-	ExternalFile *os.File          `json:"-"` // external file that is currently used to update the request
+	ExternalFile *os.File          `json:"-"` // external file currently used to update the request
 	Watcher      *fsnotify.Watcher `json:"-"` // watcher for external file updates
 }
 
-// SendRequest - takes a destination host, port and ssl boolean. Fires the request and writes the
-// response into an array
+// SendRequest fires the stored Request at Host:Port (optionally over TLS)
+// using the configured Protocol and Fingerprint. ProxyURL, if set, is honoured.
+// The raw response is written into RawResponse.
 func (r *Request) SendRequest() (int, error) {
-	var buf bytes.Buffer
-	log.Printf("[+] Replay - SendRequest Host: %s Port: %s TLS:  %t\n", r.Host, r.Port, r.TLS)
+	log.Printf("[+] Replay - SendRequest Host: %s Port: %s TLS: %t Protocol: %s Fingerprint: %q\n",
+		r.Host, r.Port, r.TLS, r.Protocol, r.Fingerprint)
 
-	port, err := strconv.Atoi(r.Port)
+        httpReq, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(r.RawRequest)))
 	if err != nil {
-		log.Printf("[!] Replay - Error in port atoi: %s\n", err)
-		return 0, err
+		log.Printf("[!] Replay - Send Request: %s\n", err)
+		return 0, nil
+	}
+
+	// Reconstruct the full URL
+	scheme := "http"
+	if r.TLS {
+		scheme = "https"
+	}
+
+	// Only append the port when it is non-standard
+	var targetHost string
+	if (scheme == "http" && r.Port == "80") || (scheme == "https" && r.Port == "443") {
+		targetHost = r.Host
+	} else {
+		targetHost = fmt.Sprintf("%s:%s", r.Host, r.Port)
+	}
+
+	rawPath := httpReq.RequestURI
+	if rawPath == "" {
+		rawPath = "/"
+	}
+
+	fullURL := fmt.Sprintf("%s://%s%s", scheme, targetHost, rawPath)
+
+	client := req.C().Clone().
+		SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
+		SetRedirectPolicy(req.NoRedirectPolicy()).
+		SetTimeout(30 * time.Second)
+
+	// Apply fingerprint impersonation first so that an explicit protocol
+	// choice below can still override the version set by the impersonator.
+	switch r.Fingerprint {
+	case FingerprintChrome:
+		client.ImpersonateChrome()
+	case FingerprintFirefox:
+		client.ImpersonateFirefox()
+	case FingerprintSafari:
+		client.ImpersonateSafari()
+	case FingerprintTLSChrome:
+		client.SetTLSFingerprintChrome()
+	case FingerprintTLSFirefox:
+		client.SetTLSFingerprintFirefox()
+	case FingerprintTLSEdge:
+		client.SetTLSFingerprintEdge()
+	case FingerprintTLSSafari:
+		client.SetTLSFingerprintSafari()
+	case FingerprintTLSIOS:
+		client.SetTLSFingerprintIOS()
+	case FingerprintTLSAndroid:
+		client.SetTLSFingerprintAndroid()
+	case FingerprintTLSRandomized:
+		client.SetTLSFingerprintRandomized()
+	}
+
+	// Apply protocol constraint
+	switch r.Protocol {
+	case ProtoHTTP1:
+		client.EnableForceHTTP1()
+	case ProtoHTTP2:
+		client.EnableForceHTTP2()
+	case ProtoHTTP3:
+		client.EnableForceHTTP3()
+	case ProtoAuto:
+		// No constraint; let the library negotiate
+	default:
+		// Handle raw protocol values from HTTPRequest.Proto (e.g. "HTTP/2.0")
+		switch r.Protocol {
+		case "HTTP/2.0":
+			client.EnableForceHTTP2()
+		default:
+			// No constraint; let the library negotiate
+		}
+	}
+
+	// Honour the downstream proxy if one is configured
+	if r.ProxyURL != "" {
+		client.SetProxyURL(r.ProxyURL)
+	}
+
+	reqObj := client.R()
+
+	// Forward headers
+	for name, vals := range httpReq.Header {
+		for _, v := range vals {
+			reqObj.SetHeader(name, v)
+		}
+	}
+
+	// Forward body
+	if httpReq.Body != nil {
+		body, err := io.ReadAll(httpReq.Body)
+		httpReq.Body.Close()
+		// Restore the body so it can be read again (e.g. on re-display)
+		httpReq.Body = io.NopCloser(bytes.NewReader(body))
+		if err != nil {
+			log.Printf("[!] Replay - SendRequest: failed to read body: %s\n", err)
+			return 0, err
+		}
+		if len(body) > 0 {
+			reqObj.SetBodyBytes(body)
+		}
 	}
 
 	start := time.Now()
-	if !r.TLS {
-		buf, err = sendTCP(r.Host, port, r.RawRequest)
-	} else {
-		buf, err = sendTLS(r.Host, port, r.RawRequest)
+
+	resp, err := reqObj.Send(strings.ToUpper(httpReq.Method), fullURL)
+	if err != nil {
+		if resp == nil || resp.Response == nil {
+			log.Printf("[!] Replay - SendRequest: %s\n", err)
+			return 0, err
+		}
+		// NoRedirectPolicy surfaces 3xx as errors; capture the response anyway
+		log.Printf("[+] Replay - SendRequest: non-nil error (likely redirect): %s\n", err)
 	}
 
-	size := buf.Len()
+	elapsed := time.Since(start)
 
-	if size > 0 {
-		r.RawResponse = buf.Bytes()
-		r.ResponseTime = time.Since(start).String()
+	raw, dumpErr := httputil.DumpResponse(resp.Response, true)
+	if dumpErr != nil {
+		log.Printf("[!] Replay - SendRequest: failed to dump response: %s\n", dumpErr)
+		return 0, dumpErr
 	}
 
-	return size, err
-}
+	r.RawResponse = raw
+	r.ResponseTime = elapsed.String()
 
-// UpdateContentLength - try and update the content length in a raw request to match the body length
-func (r *Request) UpdateContentLength() {
-	clheader := "\r\nContent-Length: "
+	log.Printf("[+] Replay - SendRequest - Received: %d bytes in %s\n", len(raw), elapsed)
 
-	crlf := bytes.Index(r.RawRequest, []byte{0x0d, 0x0a, 0x0d, 0x0a})
-	if crlf == -1 {
-		return
-	}
-
-	bodyLength := strconv.Itoa(len(r.RawRequest) - (crlf + 4))
-
-	// find the first content-length header -- this should probably be case insensitve? Though someone
-	// setting a spongebob ConTenT-LenGTh probably doesn't want us messing with their payload
-	contentLengthHeader := bytes.Index(r.RawRequest, []byte(clheader))
-
-	if contentLengthHeader == -1 {
-		return
-	}
-
-	clEOL := bytes.Index(r.RawRequest[contentLengthHeader+len(clheader):], []byte{0x0d, 0x0a})
-	if clEOL == -1 {
-		return // we have a content length header but no CRLF anywhere after it...
-	}
-
-	if clEOL == len(bodyLength) {
-		// updated length and OG length use the same number of bytes, overwrite...
-		copy(r.RawRequest[contentLengthHeader+len(clheader):contentLengthHeader+len(clheader)+clEOL], []byte(bodyLength))
-	} else if clEOL != len(bodyLength) {
-		newSlice := make([]byte, 0) //len(r.RawRequest)+len(bodyLength)-clEOL)
-		newSlice = append(newSlice, r.RawRequest[:contentLengthHeader+len(clheader)]...)
-		newSlice = append(newSlice, []byte(bodyLength)...)
-		newSlice = append(newSlice, r.RawRequest[contentLengthHeader+len(clheader)+clEOL:]...)
-		r.RawRequest = newSlice
-	}
+	return len(raw), nil
 }
 
 // Copy - return a deep copy of a replay entry
@@ -107,79 +233,4 @@ func (r *Request) Copy() Request {
 	copy(replayData.RawResponse, r.RawResponse)
 
 	return replayData
-}
-
-func sendTCP(host string, port int, packet []byte) (bytes.Buffer, error) {
-	var buf bytes.Buffer
-	var conn net.Conn
-
-	addr := strings.Join([]string{host, strconv.Itoa(port)}, ":")
-	conn, err := net.DialTimeout("tcp", addr, 30*time.Second)
-
-	if err != nil {
-		log.Printf("[!] Replay sendTCP: %s\n", err)
-		return buf, err
-	}
-
-	if conn.SetReadDeadline(time.Now().Add(30*time.Second)) != nil {
-		log.Printf("[!] Replay sendTCP: %s\n", err)
-		return buf, err
-	}
-	defer conn.Close()
-
-	l, err := conn.Write(packet)
-	if err != nil {
-		log.Printf("[!] Replay sendTCP: %s\n", err)
-		return buf, err
-	}
-
-	log.Printf("[+] Replay - sendTCP - Sent: %d\n", l)
-
-	_, err = io.Copy(&buf, conn)
-	if err != nil {
-		log.Printf("[!] Replay sendTCP: %s\n", err)
-		return buf, err
-	}
-
-	log.Printf("[+] Replay - sendTCP - Received: %d", buf.Len())
-
-	return buf, nil
-}
-
-func sendTLS(host string, port int, packet []byte) (bytes.Buffer, error) {
-	var buf bytes.Buffer
-
-	conf := &tls.Config{
-		// No certificate verification
-		InsecureSkipVerify: true,
-	}
-
-	addr := strings.Join([]string{host, strconv.Itoa(port)}, ":")
-
-	d := net.Dialer{Timeout: 30 * time.Second}
-
-	tlsConn, err := tls.DialWithDialer(&d, "tcp", addr, conf)
-	if err != nil {
-		log.Printf("[!] Replay sendTLS: %s\n", err)
-		return buf, err
-	}
-
-	if tlsConn.SetReadDeadline(time.Now().Add(30*time.Second)) != nil {
-		log.Printf("[!] Replay sendTLS: %s\n", err)
-		return buf, err
-	}
-	defer tlsConn.Close()
-
-	l, err := tlsConn.Write(packet)
-	if err != nil {
-		log.Printf("[!] Replay sendTLS: %s\n", err)
-		return buf, err
-	}
-
-	log.Printf("[+] Replay - sendTLS - Sent: %d\n", l)
-
-	io.Copy(&buf, tlsConn)
-	log.Printf("[+] Replay - sendTLS - Received: %d\n", buf.Len())
-
-	return buf, nil
 }

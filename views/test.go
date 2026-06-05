@@ -16,7 +16,7 @@ func initializeTestApp() (*tview.Application, *ProxyView, *SiteMapView, *ReplayV
 
 	// create the replayview stuff
 	replayview := new(ReplayView)
-	replayview.Init(app)
+	replayview.Init(app, "")
 
 	proxychan := make(chan modifier.Notification, 1024)
 	sitemapchan := make(chan modifier.Notification, 1024)

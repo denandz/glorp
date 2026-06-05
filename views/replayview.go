@@ -30,14 +30,17 @@ type ReplayView struct {
 	forwardButton *tview.Button   // forward history button
 	history       *tview.TextView // indicator for which item in the replay history we're lookingat
 
-	host                *tview.InputField // host field input
-	port                *tview.InputField // port input
-	tls                 *tview.Checkbox   // check box for whether or not to negotiate TLS when rep
-	updateContentLength *tview.Checkbox   // check box for whether to attempt a content-length auto update
-	externalEditor      *tview.Checkbox   // check box to use an external editor for the request, auto-fire on change
-	autoSend            *tview.Checkbox   // check box to deermine if modified requests should be auto-sent
+	host        *tview.InputField // host field input
+	port        *tview.InputField // port input
+	tls         *tview.Checkbox   // check box for whether or not to negotiate TLS when rep
+	protocol    *tview.DropDown   // drop-down for protocol selection
+	fingerprint *tview.DropDown   // drop-down for TLS/HTTP fingerprint spoofing
 
-	id string // id of the currently selected replay item
+	externalEditor *tview.Checkbox // check box to use an external editor for the request, auto-fire on change
+	autoSend       *tview.Checkbox // check box to deermine if modified requests should be auto-sent
+
+	id       string // id of the currently selected replay item
+	proxyURL string // downstream proxy url
 
 	replays map[string]*ReplayRequests // list of request in the replayer - could probably use the row identifier as the key, support renaming
 }
@@ -88,6 +91,14 @@ func (view *ReplayView) AddItem(r *replay.Request) {
 	view.replays[newID].elements[0] = r
 	r.ID = newID
 
+	if r.ProxyURL == "" {
+		r.ProxyURL = view.proxyURL
+	}
+
+	if r.Protocol == "" {
+		r.Protocol = replay.ProtoAuto
+	}
+
 	rows := view.Table.GetRowCount()
 	view.Table.SetCell(rows, 0, tview.NewTableCell(newID))
 }
@@ -132,9 +143,11 @@ func (view *ReplayView) DeleteItem(rr *ReplayRequests) {
 	}
 }
 
-// setRawRequest - sets the raw request bytes. If the replay element currently has
-// a response, duplicate it into a fresh one so we dont lose data
+// updateRawRequest updates the HTTPRequest on an entry from raw bytes edited by the
+// user (e.g. via the external editor). If the entry already has a response it is
+// duplicated into a fresh history entry so history is preserved.
 func updateRawRequest(rr *ReplayRequests, r *replay.Request, data []byte) (req *replay.Request) {
+
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
 
@@ -273,8 +286,9 @@ func (view *ReplayView) GetView() (title string, content tview.Primitive) {
 }
 
 // Init - Initialization method for the replayer view
-func (view *ReplayView) Init(app *tview.Application) {
+func (view *ReplayView) Init(app *tview.Application, proxyURL string) {
 	view.replays = make(map[string]*ReplayRequests)
+	view.proxyURL = proxyURL
 	view.responseMeta = tview.NewTable()
 	view.responseMeta.SetCell(0, 0, tview.NewTableCell("Size:").SetTextColor(tcell.ColorMediumPurple))
 	view.responseMeta.SetCell(0, 2, tview.NewTableCell("Time:").SetTextColor(tcell.ColorMediumPurple))
@@ -347,9 +361,27 @@ func (view *ReplayView) Init(app *tview.Application) {
 		}
 	})
 
-	view.updateContentLength = tview.NewCheckbox().SetChecked(true)
-	view.updateContentLength.SetLabelColor(tcell.ColorMediumPurple)
-	view.updateContentLength.SetLabel("Update CL")
+	view.protocol = tview.NewDropDown()
+	view.protocol.SetLabelColor(tcell.ColorMediumPurple)
+	view.protocol.SetLabel("Proto ")
+	view.protocol.SetOptions(replay.Protocols, nil)
+	view.protocol.SetCurrentOption(0) // default: HTTP/1.1
+	view.protocol.SetSelectedFunc(func(text string, index int) {
+		if rr, ok := view.replays[view.id]; ok {
+			rr.elements[rr.index].Protocol = text
+		}
+	})
+
+	view.fingerprint = tview.NewDropDown()
+	view.fingerprint.SetLabelColor(tcell.ColorMediumPurple)
+	view.fingerprint.SetLabel("Fingerprint ")
+	view.fingerprint.SetOptions(replay.Fingerprints, nil)
+	view.fingerprint.SetCurrentOption(0) // default: no fingerprint spoofing
+	view.fingerprint.SetSelectedFunc(func(text string, index int) {
+		if rr, ok := view.replays[view.id]; ok {
+			rr.elements[rr.index].Fingerprint = text
+		}
+	})
 
 	view.externalEditor = tview.NewCheckbox().SetChecked(false)
 	view.externalEditor.SetLabelColor(tcell.ColorMediumPurple)
@@ -495,8 +527,8 @@ func (view *ReplayView) Init(app *tview.Application) {
 	})
 
 	formTopRow := tview.NewFlex()
-	formTopRow.AddItem(view.host, 0, 7, false).AddItem(view.port, 0, 2, false).AddItem(view.tls, 0, 1, false)
-	formBottomRow := tview.NewFlex().AddItem(view.updateContentLength, 0, 1, false)
+	formTopRow.AddItem(view.host, 0, 7, false).AddItem(view.port, 0, 2, false).AddItem(view.tls, 0, 1, false).AddItem(view.protocol, 0, 2, false)
+	formBottomRow := tview.NewFlex().AddItem(view.fingerprint, 0, 3, false)
 	formBottomRow.AddItem(view.externalEditor, 0, 1, false)
 	formBottomRow.AddItem(view.autoSend, 0, 1, false)
 	connectionForm := tview.NewFlex()
@@ -526,7 +558,8 @@ func (view *ReplayView) Init(app *tview.Application) {
 		view.host,
 		view.port,
 		view.tls,
-		view.updateContentLength,
+		view.protocol,
+		view.fingerprint,
 		view.externalEditor,
 		view.autoSend,
 		view.request,
@@ -601,17 +634,43 @@ func (view *ReplayView) refreshReplay(rr *ReplayRequests) {
 	view.request.Clear()
 	view.response.Clear()
 
-	view.host.SetText(rr.elements[rr.index].Host)
-	view.port.SetText(rr.elements[rr.index].Port)
-	view.tls.SetChecked(rr.elements[rr.index].TLS)
+	elem := rr.elements[rr.index]
+	view.host.SetText(elem.Host)
+	view.port.SetText(elem.Port)
+	view.tls.SetChecked(elem.TLS)
 	view.history.SetText(strconv.Itoa(rr.index + 1))
 
-	fmt.Fprint(view.request, string(rr.elements[rr.index].RawRequest))
-	fmt.Fprint(view.response, string(rr.elements[rr.index].RawResponse))
+	// Sync protocol dropdown; default to Auto if unset
+	proto := elem.Protocol
+	if proto == "" {
+		proto = replay.ProtoAuto
+	}
+	// Normalize Go's HTTP/2 protocol representation to match dropdown option
+	if proto == "HTTP/2.0" {
+		proto = replay.ProtoHTTP2
+	}
+	for i, p := range replay.Protocols {
+		if p == proto {
+			view.protocol.SetCurrentOption(i)
+			break
+		}
+	}
+
+	// Sync fingerprint dropdown; default to none if unset
+	fp := elem.Fingerprint
+	for i, f := range replay.Fingerprints {
+		if f == fp {
+			view.fingerprint.SetCurrentOption(i)
+			break
+		}
+	}
+
+	fmt.Fprint(view.request, string(elem.RawRequest))
+	fmt.Fprint(view.response, string(elem.RawResponse))
 
 	// if an external file exists, show it in the request title
-	if rr.elements[rr.index].ExternalFile != nil {
-		view.request.SetTitle("Request - File " + rr.elements[rr.index].ExternalFile.Name())
+	if elem.ExternalFile != nil {
+		view.request.SetTitle("Request - File " + elem.ExternalFile.Name())
 		view.request.SetBorderColor(tcell.ColorDarkSeaGreen)
 		view.externalEditor.SetChecked(true)
 	} else {
@@ -628,8 +687,8 @@ func (view *ReplayView) refreshReplay(rr *ReplayRequests) {
 
 	view.response.ScrollToBeginning()
 
-	view.responseMeta.SetCell(0, 1, tview.NewTableCell(strconv.Itoa(len(rr.elements[rr.index].RawResponse))))
-	view.responseMeta.SetCell(0, 3, tview.NewTableCell(rr.elements[rr.index].ResponseTime))
+	view.responseMeta.SetCell(0, 1, tview.NewTableCell(strconv.Itoa(len(elem.RawResponse))))
+	view.responseMeta.SetCell(0, 3, tview.NewTableCell(elem.ResponseTime))
 }
 
 // Send the request - save the response as a new entry
@@ -648,10 +707,6 @@ func (view *ReplayView) sendRequest(app *tview.Application, id string) {
 		req := rr.elements[rr.index]
 
 		view.response.Clear()
-
-		if view.updateContentLength.IsChecked() {
-			req.UpdateContentLength()
-		}
 
 		done := make(chan struct{})
 

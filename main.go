@@ -56,7 +56,7 @@ func main() {
 
 	// create the replayview stuff
 	replayview := new(views.ReplayView)
-	replayview.Init(app)
+	replayview.Init(app, *downstreamProxy)
 
 	// start the Martian proxy
 	config := &proxy.Config{
