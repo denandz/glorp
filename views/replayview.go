@@ -64,7 +64,7 @@ func (view *ReplayView) LoadReplays(rr *ReplayRequests) {
 			newID = fmt.Sprintf("%s-%d", rr.ID, i)
 		}
 	}
-	log.Printf("[+] ReplayView - AddItem - Adding replay item with ID: %s\n", newID)
+	log.Printf("[+] ReplayView - LoadReplays - Adding replay item with ID: %s\n", newID)
 	view.replays[newID] = rr
 
 	rows := view.Table.GetRowCount()
@@ -88,6 +88,10 @@ func (view *ReplayView) AddItem(r *replay.Request) {
 		elements: make([]*replay.Request, 1),
 		index:    0,
 	}
+
+	// parse the protocol from the raw request
+	r.ParseProtocol()
+
 	view.replays[newID].elements[0] = r
 	r.ID = newID
 
@@ -156,6 +160,7 @@ func updateRawRequest(rr *ReplayRequests, r *replay.Request, data []byte) (req *
 		new_request.RawResponse = nil
 		new_request.ResponseTime = ""
 		new_request.RawRequest = data
+		new_request.ParseProtocol()
 
 		// Copy() ignores these pointers, manually move them across
 		new_request.ExternalFile = r.ExternalFile
@@ -168,6 +173,7 @@ func updateRawRequest(rr *ReplayRequests, r *replay.Request, data []byte) (req *
 		req = &new_request
 	} else {
 		r.RawRequest = data
+		r.ParseProtocol()
 		req = r
 	}
 
@@ -365,7 +371,7 @@ func (view *ReplayView) Init(app *tview.Application, proxyURL string) {
 	view.protocol.SetLabelColor(tcell.ColorMediumPurple)
 	view.protocol.SetLabel("Proto ")
 	view.protocol.SetOptions(replay.Protocols, nil)
-	view.protocol.SetCurrentOption(0) // default: HTTP/1.1
+	view.protocol.SetCurrentOption(0) // default Auto
 	view.protocol.SetSelectedFunc(func(text string, index int) {
 		if rr, ok := view.replays[view.id]; ok {
 			rr.elements[rr.index].Protocol = text

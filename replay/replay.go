@@ -32,16 +32,16 @@ var Protocols = []string{ProtoAuto, ProtoHTTP1, ProtoHTTP2, ProtoHTTP3}
 // "Impersonate" options spoof both TLS and HTTP/2 frame characteristics.
 // "TLS:" options spoof only the TLS ClientHello.
 const (
-	FingerprintNone         = ""
-	FingerprintChrome       = "Impersonate: Chrome"
-	FingerprintFirefox      = "Impersonate: Firefox"
-	FingerprintSafari       = "Impersonate: Safari"
-	FingerprintTLSChrome    = "TLS: Chrome"
-	FingerprintTLSFirefox   = "TLS: Firefox"
-	FingerprintTLSEdge      = "TLS: Edge"
-	FingerprintTLSSafari    = "TLS: Safari"
-	FingerprintTLSIOS       = "TLS: iOS"
-	FingerprintTLSAndroid   = "TLS: Android"
+	FingerprintNone          = ""
+	FingerprintChrome        = "Impersonate: Chrome"
+	FingerprintFirefox       = "Impersonate: Firefox"
+	FingerprintSafari        = "Impersonate: Safari"
+	FingerprintTLSChrome     = "TLS: Chrome"
+	FingerprintTLSFirefox    = "TLS: Firefox"
+	FingerprintTLSEdge       = "TLS: Edge"
+	FingerprintTLSSafari     = "TLS: Safari"
+	FingerprintTLSIOS        = "TLS: iOS"
+	FingerprintTLSAndroid    = "TLS: Android"
 	FingerprintTLSRandomized = "TLS: Randomized"
 )
 
@@ -63,16 +63,16 @@ var Fingerprints = []string{
 
 // Request - main struct that holds replay request/response data
 type Request struct {
-	ID          string        // The ID as displayed in the table
-	Host        string        // the destination host
-	Port        string        // the destination port
-	TLS         bool          // does the destination expect TLS
-	Protocol    string        // HTTP protocol version: HTTP/1.1, HTTP/2, HTTP/3
-	Fingerprint string        // TLS/HTTP fingerprint impersonation (see Fingerprints slice)
-	ProxyURL    string        // downstream proxy URL to use when sending (e.g. http://127.0.0.1:8080)
-	RawRequest  []byte // the request to send
-	RawResponse []byte        // raw HTTP response bytes
-	ResponseTime string       // the time it took to receive the response
+	ID           string // The ID as displayed in the table
+	Host         string // the destination host
+	Port         string // the destination port
+	TLS          bool   // does the destination expect TLS
+	Protocol     string // HTTP protocol version: HTTP/1.1, HTTP/2, HTTP/3
+	Fingerprint  string // TLS/HTTP fingerprint impersonation (see Fingerprints slice)
+	ProxyURL     string // downstream proxy URL to use when sending (e.g. http://127.0.0.1:8080)
+	RawRequest   []byte // the request to send
+	RawResponse  []byte // raw HTTP response bytes
+	ResponseTime string // the time it took to receive the response
 
 	ExternalFile *os.File          `json:"-"` // external file currently used to update the request
 	Watcher      *fsnotify.Watcher `json:"-"` // watcher for external file updates
@@ -85,7 +85,7 @@ func (r *Request) SendRequest() (int, error) {
 	log.Printf("[+] Replay - SendRequest Host: %s Port: %s TLS: %t Protocol: %s Fingerprint: %q\n",
 		r.Host, r.Port, r.TLS, r.Protocol, r.Fingerprint)
 
-        httpReq, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(r.RawRequest)))
+	httpReq, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(r.RawRequest)))
 	if err != nil {
 		log.Printf("[!] Replay - Send Request: %s\n", err)
 		return 0, nil
@@ -153,13 +153,7 @@ func (r *Request) SendRequest() (int, error) {
 	case ProtoAuto:
 		// No constraint; let the library negotiate
 	default:
-		// Handle raw protocol values from HTTPRequest.Proto (e.g. "HTTP/2.0")
-		switch r.Protocol {
-		case "HTTP/2.0":
-			client.EnableForceHTTP2()
-		default:
-			// No constraint; let the library negotiate
-		}
+		// No constraint; let the library negotiate
 	}
 
 	// Honour the downstream proxy if one is configured
@@ -233,4 +227,14 @@ func (r *Request) Copy() Request {
 	copy(replayData.RawResponse, r.RawResponse)
 
 	return replayData
+}
+
+// ParseProtocol - parses the http protocol from the raw request
+func (r *Request) ParseProtocol() {
+	// parse the protocol from the raw request data
+	raw := r.RawRequest
+	idx := bytes.Index(raw, []byte("HTTP/"))
+	if idx >= 0 && idx+6 <= len(raw) {
+		r.Protocol = string(raw[idx : idx+6])
+	}
 }
