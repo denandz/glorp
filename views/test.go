@@ -20,7 +20,8 @@ func initializeTestApp() (*tview.Application, *ProxyView, *SiteMapView, *ReplayV
 
 	proxychan := make(chan modifier.Notification, 1024)
 	sitemapchan := make(chan modifier.Notification, 1024)
-	logger := modifier.NewLogger(app, proxychan, sitemapchan)
+	wschan := make(chan modifier.Notification, 1024)
+	logger := modifier.NewLogger(app, proxychan, sitemapchan, wschan)
 	//proxy.StartProxy(logger, config)
 
 	// create the main proxy window
@@ -33,7 +34,7 @@ func initializeTestApp() (*tview.Application, *ProxyView, *SiteMapView, *ReplayV
 
 	// save view
 	saveview := new(SaveRestoreView)
-	saveview.Init(app, replayview, proxyview, sitemapview)
+	saveview.Init(app, replayview, proxyview, sitemapview, nil)
 
 	return app, proxyview, sitemapview, replayview, saveview
 }

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/fetch"
@@ -35,6 +36,9 @@ type tabCapture struct {
 
 	muProtoUpdate      sync.Mutex
 	pendingProtoUpdate map[network.RequestID]string // netReqID -> glorp entry ID
+
+	muWS   sync.Mutex
+	wsURLs map[network.RequestID]string // netReqID -> WebSocket URL
 }
 
 func newTabCapture(ctx context.Context, cancel context.CancelFunc, logger *modifier.Logger) *tabCapture {
@@ -44,6 +48,7 @@ func newTabCapture(ctx context.Context, cancel context.CancelFunc, logger *modif
 		cancel:             cancel,
 		pending:            make(map[fetch.RequestID]*pendingResponse),
 		pendingProtoUpdate: make(map[network.RequestID]string),
+		wsURLs:             make(map[network.RequestID]string),
 	}
 }
 
@@ -55,6 +60,29 @@ func (t *tabCapture) generateID() string {
 
 func (t *tabCapture) enableFetch() error {
 	return chromedp.Run(t.ctx, fetch.Enable(), network.Enable())
+}
+
+func (t *tabCapture) handleWebSocketFrame(requestID network.RequestID, direction string, opcode int, payload string) {
+	t.muWS.Lock()
+	url := t.wsURLs[requestID]
+	defer t.muWS.Unlock()
+
+	if url == "" {
+		return
+	}
+
+	id := t.generateID()
+
+	msg := &modifier.WebSocketEntry{
+		ID:        id,
+		URL:       url,
+		Direction: direction,
+		Timestamp: time.Now(),
+		Opcode:    opcode,
+		Payload:   payload,
+	}
+
+	t.logger.InjectWebSocketMessage(msg)
 }
 
 func (t *tabCapture) eventHandler(ev any) {
@@ -84,6 +112,16 @@ func (t *tabCapture) eventHandler(ev any) {
 				t.applyProto(entryID, ev.Response.Protocol)
 			}
 		}
+	case *network.EventWebSocketCreated:
+		t.muWS.Lock()
+		t.wsURLs[ev.RequestID] = ev.URL
+		t.muWS.Unlock()
+	case *network.EventWebSocketFrameSent:
+		t.handleWebSocketFrame(ev.RequestID, "sent", int(ev.Response.Opcode), ev.Response.PayloadData)
+	case *network.EventWebSocketFrameReceived:
+		t.handleWebSocketFrame(ev.RequestID, "received", int(ev.Response.Opcode), ev.Response.PayloadData)
+	case *network.EventWebSocketFrameError:
+		log.Printf("[!] Browser - Websocket Frame Error: %s, %s", ev.RequestID, ev.ErrorMessage)
 	}
 }
 
@@ -228,10 +266,13 @@ type Capture struct {
 	allocCancel context.CancelFunc
 	mainCtx     context.Context
 	mainCancel  context.CancelFunc
+
+	mu      sync.Mutex
+	targets map[target.ID]bool
 }
 
 func NewCapture(logger *modifier.Logger) *Capture {
-	return &Capture{logger: logger}
+	return &Capture{logger: logger, targets: make(map[target.ID]bool)}
 }
 
 func (c *Capture) ConnectWS(wsURL string) error {
@@ -281,22 +322,11 @@ func (c *Capture) Start() {
 
 		browserExecutor := cdp.WithExecutor(c.mainCtx, cctx.Browser)
 
+		// Calling SetDiscoverTargets(true) emits the EventTargetCreated callback
+		// for all existing tabs and pages
 		err = target.SetDiscoverTargets(true).Do(browserExecutor)
 		if err != nil {
 			log.Printf("[!] Browser - SetDiscoverTargets: %s\n", err)
-		}
-
-		targets, err := target.GetTargets().Do(browserExecutor)
-		if err != nil {
-			log.Printf("[!] Browser - GetTargets: %s\n", err)
-			return
-		}
-
-		mainTargetID := cctx.Target.TargetID
-		for _, t := range targets {
-			if t.Type == "page" && t.TargetID != mainTargetID {
-				go c.attachToTarget(t.TargetID)
-			}
 		}
 
 		<-c.mainCtx.Done()
@@ -304,6 +334,14 @@ func (c *Capture) Start() {
 }
 
 func (c *Capture) attachToTarget(targetID target.ID) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.targets[targetID] { // already attached
+		return
+	}
+
+	c.targets[targetID] = true
+
 	ctx, cancel := chromedp.NewContext(c.allocCtx, chromedp.WithTargetID(targetID))
 	tab := newTabCapture(ctx, cancel, c.logger)
 	err := chromedp.Run(tab.ctx)
