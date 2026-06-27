@@ -529,7 +529,10 @@ func (view *ProxyView) writeRequest(e *modifier.Entry) {
 	}
 
 	switch e.Source {
-	case modifier.SourceProxy:
+	case modifier.SourceBrowser:
+		fmt.Fprintf(view.requestBox, string(e.Request.Raw))
+		fmt.Fprint(view.requestBox, "\u2800")
+	default:
 		mv := messageview.New()
 		if err := mv.SnapshotRequest(req); err != nil {
 			log.Printf("[!] Error writeRequest %s\n", err)
@@ -549,9 +552,6 @@ func (view *ProxyView) writeRequest(e *modifier.Entry) {
 		}
 
 		fmt.Fprint(view.requestBox, string(body))
-		fmt.Fprint(view.requestBox, "\u2800")
-	case modifier.SourceBrowser:
-		fmt.Fprintf(view.requestBox, string(e.Request.Raw))
 		fmt.Fprint(view.requestBox, "\u2800")
 	}
 }
@@ -579,7 +579,10 @@ func (view *ProxyView) writeResponse(e *modifier.Entry) {
 	}
 
 	switch e.Source {
-	case modifier.SourceProxy:
+	case modifier.SourceBrowser:
+		fmt.Fprintf(view.responseBox, string(e.Response.Raw))
+		fmt.Fprint(view.responseBox, "\u2800")
+	default:
 		reader := bytes.NewReader(e.Response.Raw)
 		resp, err := http.ReadResponse(bufio.NewReader(reader), nil)
 
@@ -607,9 +610,6 @@ func (view *ProxyView) writeResponse(e *modifier.Entry) {
 		}
 
 		fmt.Fprint(view.responseBox, string(body))
-		fmt.Fprint(view.responseBox, "\u2800")
-	case modifier.SourceBrowser:
-		fmt.Fprintf(view.responseBox, string(e.Response.Raw))
 		fmt.Fprint(view.responseBox, "\u2800")
 	}
 }
