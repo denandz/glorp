@@ -85,6 +85,7 @@ func (t *tabCapture) handleWebSocketFrame(requestID network.RequestID, direction
 	t.logger.InjectWebSocketMessage(msg)
 }
 
+
 func (t *tabCapture) eventHandler(ev any) {
 	switch ev := ev.(type) {
 	case *fetch.EventRequestPaused:
@@ -122,6 +123,10 @@ func (t *tabCapture) eventHandler(ev any) {
 		t.handleWebSocketFrame(ev.RequestID, "received", int(ev.Response.Opcode), ev.Response.PayloadData)
 	case *network.EventWebSocketFrameError:
 		log.Printf("[!] Browser - Websocket Frame Error: %s, %s", ev.RequestID, ev.ErrorMessage)
+	case *network.EventWebSocketClosed:
+		t.muWS.Lock()
+		delete(t.wsURLs, ev.RequestID)
+		t.muWS.Unlock()
 	}
 }
 
