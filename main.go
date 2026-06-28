@@ -133,6 +133,9 @@ func main() {
 	mainWindow := tview.NewPages()
 	footer := tview.NewTextView().SetDynamicColors(true).SetRegions(true).SetWrap(false)
 	footer.SetHighlightedFunc(func(added, removed, remaining []string) {
+		if len(added) == 0 {
+			return
+		}
 		mainWindow.SwitchToPage(added[0]) // switching to page does not SetFocus on the page, go figure...
 
 		_, p := mainWindow.GetFrontPage()
