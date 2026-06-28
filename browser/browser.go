@@ -399,6 +399,11 @@ func (c *Capture) Start() {
 			return
 		}
 
+		// register the new tab prior to SetDiscoveryTargets to avoid duplicate entries
+		c.mu.Lock()
+		c.targets[cctx.Target.TargetID] = true
+		c.mu.Unlock()
+
 		chromedp.ListenTarget(c.mainCtx, mainTab.eventHandler)
 
 		err = mainTab.enableFetch()
