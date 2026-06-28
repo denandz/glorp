@@ -41,6 +41,55 @@ type tabCapture struct {
 	wsURLs map[network.RequestID]string // netReqID -> WebSocket URL
 }
 
+func (t *tabCapture) eventHandler(ev any) {
+	switch ev := ev.(type) {
+	case *fetch.EventRequestPaused:
+		if ev.ResponseStatusCode > 0 {
+			t.handleResponse(ev)
+			return
+		}
+		t.handleRequest(ev)
+	case *fetch.EventAuthRequired:
+		go func() {
+			chromedp.Run(t.ctx, chromedp.ActionFunc(func(c context.Context) error {
+				return fetch.ContinueWithAuth(ev.RequestID, &fetch.AuthChallengeResponse{
+					Response: "Default",
+				}).Do(c)
+			}))
+		}()
+	case *network.EventResponseReceived:
+		if ev.Response != nil {
+			t.muProtoUpdate.Lock()
+			entryID := t.pendingProtoUpdate[ev.RequestID]
+			delete(t.pendingProtoUpdate, ev.RequestID)
+			t.muProtoUpdate.Unlock()
+
+			if entryID != "" && ev.Response.Protocol != "" {
+				t.applyProto(entryID, ev.Response.Protocol)
+			}
+		}
+	case *network.EventWebSocketCreated:
+		t.muWS.Lock()
+		t.wsURLs[ev.RequestID] = ev.URL
+		t.muWS.Unlock()
+	case *network.EventWebSocketFrameSent:
+		t.handleWebSocketFrame(ev.RequestID, "sent", int(ev.Response.Opcode), ev.Response.PayloadData)
+	case *network.EventWebSocketFrameReceived:
+		t.handleWebSocketFrame(ev.RequestID, "received", int(ev.Response.Opcode), ev.Response.PayloadData)
+	case *network.EventWebSocketFrameError:
+		log.Printf("[!] Browser - Websocket Frame Error: %s, %s", ev.RequestID, ev.ErrorMessage)
+	case *network.EventWebSocketWillSendHandshakeRequest:
+		t.handleWebSocketHandshakeRequest(ev)
+	case *network.EventWebSocketHandshakeResponseReceived:
+		t.handleWebSocketHandshakeResponse(ev)
+
+	case *network.EventWebSocketClosed:
+		t.muWS.Lock()
+		delete(t.wsURLs, ev.RequestID)
+		t.muWS.Unlock()
+	}
+}
+
 func newTabCapture(ctx context.Context, cancel context.CancelFunc, logger *modifier.Logger) *tabCapture {
 	return &tabCapture{
 		logger:             logger,
@@ -160,55 +209,6 @@ func (t *tabCapture) handleWebSocketHandshakeResponse(ev *network.EventWebSocket
 	err := t.logger.InjectResponse(id, resp)
 	if err != nil {
 		log.Printf("[!] Browser - InjectResponse (WS): %s\n", err)
-	}
-}
-
-func (t *tabCapture) eventHandler(ev any) {
-	switch ev := ev.(type) {
-	case *fetch.EventRequestPaused:
-		if ev.ResponseStatusCode > 0 {
-			t.handleResponse(ev)
-			return
-		}
-		t.handleRequest(ev)
-	case *fetch.EventAuthRequired:
-		go func() {
-			chromedp.Run(t.ctx, chromedp.ActionFunc(func(c context.Context) error {
-				return fetch.ContinueWithAuth(ev.RequestID, &fetch.AuthChallengeResponse{
-					Response: "Default",
-				}).Do(c)
-			}))
-		}()
-	case *network.EventResponseReceived:
-		if ev.Response != nil {
-			t.muProtoUpdate.Lock()
-			entryID := t.pendingProtoUpdate[ev.RequestID]
-			delete(t.pendingProtoUpdate, ev.RequestID)
-			t.muProtoUpdate.Unlock()
-
-			if entryID != "" && ev.Response.Protocol != "" {
-				t.applyProto(entryID, ev.Response.Protocol)
-			}
-		}
-	case *network.EventWebSocketCreated:
-		t.muWS.Lock()
-		t.wsURLs[ev.RequestID] = ev.URL
-		t.muWS.Unlock()
-	case *network.EventWebSocketFrameSent:
-		t.handleWebSocketFrame(ev.RequestID, "sent", int(ev.Response.Opcode), ev.Response.PayloadData)
-	case *network.EventWebSocketFrameReceived:
-		t.handleWebSocketFrame(ev.RequestID, "received", int(ev.Response.Opcode), ev.Response.PayloadData)
-	case *network.EventWebSocketFrameError:
-		log.Printf("[!] Browser - Websocket Frame Error: %s, %s", ev.RequestID, ev.ErrorMessage)
-	case *network.EventWebSocketWillSendHandshakeRequest:
-		t.handleWebSocketHandshakeRequest(ev)
-	case *network.EventWebSocketHandshakeResponseReceived:
-		t.handleWebSocketHandshakeResponse(ev)
-
-	case *network.EventWebSocketClosed:
-		t.muWS.Lock()
-		delete(t.wsURLs, ev.RequestID)
-		t.muWS.Unlock()
 	}
 }
 
