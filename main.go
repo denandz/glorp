@@ -69,7 +69,8 @@ func main() {
 
 	proxychan := make(chan modifier.Notification, 1024)
 	sitemapchan := make(chan modifier.Notification, 1024)
-	logger := modifier.NewLogger(app, proxychan, sitemapchan)
+	wschan := make(chan modifier.Notification, 1024)
+	logger := modifier.NewLogger(app, proxychan, sitemapchan, wschan)
 	proxy.StartProxy(logger, config)
 
 	// start the browser CDP capture if requested
@@ -89,6 +90,13 @@ func main() {
 	proxyview := new(views.ProxyView)
 	proxyview.Init(app, replayview, logger, proxychan)
 
+	// create the websocket view if CDP is active
+	var websocketview *views.WebSocketView
+	if *cdpURL != "" {
+		websocketview = new(views.WebSocketView)
+		websocketview.Init(app, logger, wschan)
+	}
+
 	// View for the logs, create this now so we dont miss logs
 	logText := tview.NewTextView()
 	logText.SetChangedFunc(func() {
@@ -107,7 +115,7 @@ func main() {
 
 	// Save/load view
 	saveview := new(views.SaveRestoreView)
-	saveview.Init(app, replayview, proxyview, sitemapview)
+	saveview.Init(app, replayview, proxyview, sitemapview, websocketview)
 
 	// Pages
 	pages := []Window{
@@ -116,6 +124,9 @@ func main() {
 		replayview.GetView,
 		Log,
 		saveview.GetView,
+	}
+	if websocketview != nil {
+		pages = append(pages, websocketview.GetView)
 	}
 
 	// Main layout

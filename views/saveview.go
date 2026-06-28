@@ -22,6 +22,7 @@ type savefile struct {
 	Version      string `json:",omitempty"`
 	Replays      []ReplaySaves
 	Proxyentries []modifier.Entry
+	WebSocket    []modifier.WebSocketEntry `json:",omitempty"`
 }
 
 // old style save file
@@ -43,7 +44,7 @@ func (view *SaveRestoreView) GetView() (title string, content tview.Primitive) {
 }
 
 // Init - Initialize the save view
-func (view *SaveRestoreView) Init(app *tview.Application, replays *ReplayView, proxy *ProxyView, sitemap *SiteMapView) {
+func (view *SaveRestoreView) Init(app *tview.Application, replays *ReplayView, proxy *ProxyView, sitemap *SiteMapView, websocket *WebSocketView) {
 	view.Layout = tview.NewPages()
 	var msg string
 
@@ -57,7 +58,7 @@ func (view *SaveRestoreView) Init(app *tview.Application, replays *ReplayView, p
 	form.AddButton("Save", func() {
 		_, err := os.Stat(filename.GetText())
 		if os.IsNotExist(err) { // need to check if dir
-			if Save(filename.GetText(), replays, proxy) {
+			if Save(filename.GetText(), replays, proxy, websocket) {
 				msg = "Save Complete"
 			} else {
 				msg = "Save Failed"
@@ -66,7 +67,7 @@ func (view *SaveRestoreView) Init(app *tview.Application, replays *ReplayView, p
 		} else {
 			boolModal(app, view.Layout, "File exists - overwrite?", func(b bool) {
 				if b {
-					if !Save(filename.GetText(), replays, proxy) {
+					if !Save(filename.GetText(), replays, proxy, websocket) {
 						log.Println("[!] Error: Save failed")
 					}
 				}
@@ -74,7 +75,7 @@ func (view *SaveRestoreView) Init(app *tview.Application, replays *ReplayView, p
 		}
 	})
 	form.AddButton("Load", func() {
-		if Load(filename.GetText(), replays, proxy, sitemap) {
+		if Load(filename.GetText(), replays, proxy, sitemap, websocket) {
 			msg = "Loaded"
 		} else {
 			msg = "Load failed"
@@ -86,7 +87,7 @@ func (view *SaveRestoreView) Init(app *tview.Application, replays *ReplayView, p
 }
 
 // Save - spool the replay and proxy state off to a file
-func Save(filename string, replayview *ReplayView, proxy *ProxyView) bool {
+func Save(filename string, replayview *ReplayView, proxy *ProxyView, websocket *WebSocketView) bool {
 	if filename == "" {
 		return false
 	}
@@ -120,10 +121,21 @@ func Save(filename string, replayview *ReplayView, proxy *ProxyView) bool {
 		return proxyentries[i].StartedDateTime.Before(proxyentries[j].StartedDateTime)
 	})
 
+	var wsEntries []modifier.WebSocketEntry
+	if websocket != nil {
+		for _, v := range websocket.Logger.GetWebSocketEntries() {
+			wsEntries = append(wsEntries, *v)
+		}
+		sort.Slice(wsEntries, func(i, j int) bool {
+			return wsEntries[i].Timestamp.Before(wsEntries[j].Timestamp)
+		})
+	}
+
 	s := &savefile{
-		Version:      "v1.1",
+		Version:      "v1.2",
 		Replays:      replays,
 		Proxyentries: proxyentries,
+		WebSocket:    wsEntries,
 	}
 
 	var jsonData []byte
@@ -145,7 +157,7 @@ func Save(filename string, replayview *ReplayView, proxy *ProxyView) bool {
 }
 
 // Load - needs to read a json file, clear out the proxy and replay tables and repopulate them
-func Load(filename string, replayview *ReplayView, prox *ProxyView, sitemap *SiteMapView) bool {
+func Load(filename string, replayview *ReplayView, prox *ProxyView, sitemap *SiteMapView, websocket *WebSocketView) bool {
 	f, err := os.Open(filename)
 	if err != nil {
 		log.Println(err)
@@ -166,7 +178,7 @@ func Load(filename string, replayview *ReplayView, prox *ProxyView, sitemap *Sit
 		return false
 	}
 
-	if s.Version == "v1.1" {
+	if s.Version == "v1.1" || s.Version == "v1.2" {
 		replayview.Table.Clear()
 
 		prox.Logger.Reset()
@@ -192,7 +204,23 @@ func Load(filename string, replayview *ReplayView, prox *ProxyView, sitemap *Sit
 
 			replayview.LoadReplays(&rr)
 		}
-	} else if s.Version == "" {
+
+		// v1.2 has websocket data
+		if s.Version == "v1.2" {
+			// restore websocket entries
+			if websocket != nil && len(s.WebSocket) > 0 {
+				prox.Logger.ResetWSEntries()
+				for _, v := range s.WebSocket {
+					entry := v
+					prox.Logger.AddWebSocketEntry(&entry)
+				}
+				websocket.ReloadTable()
+			}
+		}
+
+		return true
+	}
+	if s.Version == "" {
 		// old style save file
 		log.Printf("[+] No version number in save file - loading old-style save")
 
@@ -215,10 +243,9 @@ func Load(filename string, replayview *ReplayView, prox *ProxyView, sitemap *Sit
 		for i := range ls.Replays {
 			replayview.AddItem(&ls.Replays[i])
 		}
-	} else {
-		log.Printf("[!] Unknown save file version")
-		return false
-	}
 
-	return true
+		return true
+	}
+	log.Printf("[!] Unknown save file version")
+	return false
 }

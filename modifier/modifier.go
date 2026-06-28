@@ -16,15 +16,17 @@ import (
 type Logger struct {
 	mu                      sync.Mutex
 	entries                 Entries
+	wsEntries               map[string]*WebSocketEntry
 	proxynotificationchan   chan Notification
 	sitemapnotificationchan chan Notification
+	wsnotificationchan      chan Notification
 	app                     *tview.Application
 }
 
 // Notification channel struct. Holds the element ID and an int for request or response
 type Notification struct {
 	ID        string
-	NotifType int // 0 == request, 1 == response
+	NotifType int // 0 == request, 1 == response, 2 == websocket
 }
 
 // SourceType is the orign of the entry. Proxy, browser, etc
@@ -93,12 +95,14 @@ type Response struct {
 
 // NewLogger returns a HAR logger. The returned
 // logger logs all request post data and response bodies by default.
-func NewLogger(app *tview.Application, proxychan chan Notification, sitemapchan chan Notification) *Logger {
+func NewLogger(app *tview.Application, proxychan chan Notification, sitemapchan chan Notification, wschan chan Notification) *Logger {
 	l := &Logger{
 		entries:                 make(map[string]*Entry),
+		wsEntries:               make(map[string]*WebSocketEntry),
 		app:                     app,
 		proxynotificationchan:   proxychan,
 		sitemapnotificationchan: sitemapchan,
+		wsnotificationchan:      wschan,
 	}
 	return l
 }
@@ -285,6 +289,7 @@ func (l *Logger) Reset() {
 	defer l.mu.Unlock()
 
 	l.entries = make(map[string]*Entry)
+	l.wsEntries = make(map[string]*WebSocketEntry)
 }
 
 // Lock the mutex

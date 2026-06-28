@@ -7,7 +7,7 @@ import (
 func TestLoad(t *testing.T) {
 	_, proxyview, sitemapview, replayview, _ := initializeTestApp()
 
-	if Load("../tests/savev1.1.json", replayview, proxyview, sitemapview) == false {
+	if Load("../tests/savev1.1.json", replayview, proxyview, sitemapview, nil) == false {
 		t.Errorf("TestLoad Load: got %v want %v", false, true)
 	}
 
@@ -27,7 +27,7 @@ func TestLoad(t *testing.T) {
 func TestLegacyLoad(t *testing.T) {
 	_, proxyview, sitemapview, replayview, _ := initializeTestApp()
 
-	if Load("../tests/oldsave.json", replayview, proxyview, sitemapview) == false {
+	if Load("../tests/oldsave.json", replayview, proxyview, sitemapview, nil) == false {
 		t.Errorf("TestLegacyLoad Load: got %v want %v", false, true)
 	}
 
