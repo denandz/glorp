@@ -85,6 +85,83 @@ func (t *tabCapture) handleWebSocketFrame(requestID network.RequestID, direction
 	t.logger.InjectWebSocketMessage(msg)
 }
 
+func (t *tabCapture) handleWebSocketHandshakeRequest(ev *network.EventWebSocketWillSendHandshakeRequest) {
+	t.muWS.Lock()
+	rawUrl := t.wsURLs[ev.RequestID]
+	t.muWS.Unlock()
+
+	if rawUrl == "" {
+		return
+	}
+
+	id := t.generateID()
+
+	// websocket request always GET per RFC 6455
+	req, err := http.NewRequest("GET", rawUrl, nil)
+	if err != nil {
+		log.Printf("[!] Browser - buildWSRequest: %s\n", err)
+		return
+	}
+
+	for k, v := range ev.Request.Headers {
+		switch val := v.(type) {
+		case string:
+			req.Header.Set(k, val)
+		}
+	}
+
+	// need to parse the url back from ws and wss into http/https here
+	// so DumpRequestOut doesn't complain in the logger
+	if req.URL.Scheme == "wss" {
+		req.URL.Scheme = "https"
+	} else if req.URL.Scheme == "ws" {
+		req.URL.Scheme = "http"
+	}
+
+	err = t.logger.InjectRequest(id, req, modifier.SourceBrowser)
+	if err != nil {
+		log.Printf("[!] Browser - InjectRequest (WS): %s\n", err)
+	}
+
+	// tweak the protocol back from http/https back to ws/wss
+	entry := t.logger.GetEntry(id)
+	entry.Request.URL = rawUrl
+
+	t.muWS.Lock()
+	t.pendingProtoUpdate[ev.RequestID] = id
+	t.muWS.Unlock()
+}
+
+func (t *tabCapture) handleWebSocketHandshakeResponse(ev *network.EventWebSocketHandshakeResponseReceived) {
+	t.muWS.Lock()
+	id := t.pendingProtoUpdate[ev.RequestID]
+	delete(t.pendingProtoUpdate, ev.RequestID)
+	t.muWS.Unlock()
+
+	if id == "" {
+		return
+	}
+
+	headers := make(http.Header)
+	for k, v := range ev.Response.Headers {
+		switch val := v.(type) {
+		case string:
+			headers.Set(k, val)
+		}
+	}
+
+	resp := &http.Response{
+		StatusCode: int(ev.Response.Status),
+		Status:     ev.Response.StatusText,
+		Header:     headers,
+		Body:       http.NoBody,
+	}
+
+	err := t.logger.InjectResponse(id, resp)
+	if err != nil {
+		log.Printf("[!] Browser - InjectResponse (WS): %s\n", err)
+	}
+}
 
 func (t *tabCapture) eventHandler(ev any) {
 	switch ev := ev.(type) {
@@ -123,6 +200,11 @@ func (t *tabCapture) eventHandler(ev any) {
 		t.handleWebSocketFrame(ev.RequestID, "received", int(ev.Response.Opcode), ev.Response.PayloadData)
 	case *network.EventWebSocketFrameError:
 		log.Printf("[!] Browser - Websocket Frame Error: %s, %s", ev.RequestID, ev.ErrorMessage)
+	case *network.EventWebSocketWillSendHandshakeRequest:
+		t.handleWebSocketHandshakeRequest(ev)
+	case *network.EventWebSocketHandshakeResponseReceived:
+		t.handleWebSocketHandshakeResponse(ev)
+
 	case *network.EventWebSocketClosed:
 		t.muWS.Lock()
 		delete(t.wsURLs, ev.RequestID)
