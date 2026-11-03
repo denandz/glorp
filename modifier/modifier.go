@@ -1,6 +1,9 @@
 package modifier
 
 import (
+	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
@@ -8,8 +11,6 @@ import (
 	"time"
 
 	"github.com/rivo/tview"
-
-	"github.com/google/martian/v3"
 )
 
 // Logger maintains request and response log entries.
@@ -29,14 +30,21 @@ type Notification struct {
 	NotifType int // 0 == request, 1 == response, 2 == websocket
 }
 
+// GenerateID returns a unique entry ID (16 hex chars).
+// Shared by all capture sources (browser and proxy) so entry IDs have one format
+func GenerateID() string {
+	buf := make([]byte, 8)
+	rand.Read(buf)
+	return hex.EncodeToString(buf)
+}
+
 // SourceType is the orign of the entry. Proxy, browser, etc
 type SourceType string
 
 const (
-	SourceProxy SourceType = "proxy"
+	SourceProxy   SourceType = "proxy"
 	SourceBrowser SourceType = "browser"
 )
-
 
 // Entries stores all the Entry items
 type Entries map[string]*Entry
@@ -54,7 +62,7 @@ type Entry struct {
 	// Response contains the detailed information about the response.
 	Response *Response `json:"response,omitempty"`
 	// Source shows where the entry originated from. Proxy, browser, etc
-	Source	SourceType `json:"sourcetype,omitempty"`
+	Source SourceType `json:"sourcetype,omitempty"`
 }
 
 // Request holds data about an individual HTTP request.
@@ -108,18 +116,11 @@ func NewLogger(app *tview.Application, proxychan chan Notification, sitemapchan 
 }
 
 // ModifyRequest logs requests.
-func (l *Logger) ModifyRequest(req *http.Request) error {
-	ctx := martian.NewContext(req)
-	if ctx.SkippingLogging() {
-		return nil
-	}
-
+func (l *Logger) ModifyRequest(id string, req *http.Request) error {
 	// don't track CONNECTS
 	if req.Method == http.MethodConnect {
 		return nil
 	}
-
-	id := ctx.ID()
 
 	e := l.RecordRequest(id, req, SourceProxy)
 
@@ -144,7 +145,7 @@ func (l *Logger) RecordRequest(id string, req *http.Request, source SourceType) 
 		ID:              id,
 		StartedDateTime: time.Now().UTC(),
 		Request:         hreq,
-		Source:		 source,
+		Source:          source,
 	}
 
 	l.mu.Lock()
@@ -174,16 +175,29 @@ func NewRequest(req *http.Request) (*Request, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// DumpRequestOut writer hardcodes "HTTP/1.1". Patch the request line
+	// so the dump reflects the protocol the request actually spoke 
+	// (e.g. HTTP/2 through the h2 MITM path).
+	// TODO: Does it even make sense to use this method of raw storage any more? 
+	// The raw body situation is based on the assumption of a text based protocol,
+	// which HTTP2 is definetly not.
+	if req.Proto != "" && req.Proto != "HTTP/1.1" {
+		if i := bytes.Index(raw, []byte("\r\n")); i > 0 {
+			line := raw[:i]
+			if j := bytes.LastIndex(line, []byte("HTTP/1.1")); j == len(line)-len("HTTP/1.1") {
+				raw = append(append(append([]byte{}, line[:j]...), []byte(req.Proto)...), raw[i:]...)
+			}
+		}
+	}
+
 	r.Raw = raw
 
 	return r, nil
 }
 
 // ModifyResponse logs responses.
-func (l *Logger) ModifyResponse(res *http.Response) error {
-	ctx := martian.NewContext(res.Request)
-	id := ctx.ID()
-
+func (l *Logger) ModifyResponse(id string, res *http.Response) error {
 	e := l.RecordResponse(id, res)
 
 	l.proxynotificationchan <- Notification{id, 1}

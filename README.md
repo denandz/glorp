@@ -1,6 +1,6 @@
 # GLORP
 
-Glorp is an HTTP intercept proxy, allowing the inspection and replaying of HTTP requests. The layout and flow was designed to function similar to Portswigger's Burp Proxy and Repeater tabs. The proxy functionality is done using [Google's Martian](https://github.com/google/martian), UI is done with [TView](https://github.com/rivo/tview).
+Glorp is an HTTP intercept proxy, allowing the inspection and replaying of HTTP requests. The layout and flow was designed to function similar to Portswigger's Burp Proxy and Repeater tabs. The proxy functionality is done using [goproxy](https://github.com/elazarl/goproxy), UI is done with [TView](https://github.com/rivo/tview).
 
 The idea is to provide a CLI based tool for when you wanna-look-at-this-thing-real-quick and not fire up yet another full-fat container/vm/whatever with Burp and so forth.
 

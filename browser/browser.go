@@ -3,9 +3,7 @@ package browser
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"encoding/base64"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -102,12 +100,6 @@ func newTabCapture(ctx context.Context, cancel context.CancelFunc, logger *modif
 	}
 }
 
-func (t *tabCapture) generateID() string {
-	buf := make([]byte, 8)
-	rand.Read(buf)
-	return hex.EncodeToString(buf)
-}
-
 func (t *tabCapture) enableFetch() error {
 	return chromedp.Run(t.ctx, fetch.Enable(), network.Enable())
 }
@@ -121,7 +113,7 @@ func (t *tabCapture) handleWebSocketFrame(requestID network.RequestID, direction
 		return
 	}
 
-	id := t.generateID()
+	id := modifier.GenerateID()
 
 	msg := &modifier.WebSocketEntry{
 		ID:        id,
@@ -144,7 +136,7 @@ func (t *tabCapture) handleWebSocketHandshakeRequest(ev *network.EventWebSocketW
 		return
 	}
 
-	id := t.generateID()
+	id := modifier.GenerateID()
 
 	// websocket request always GET per RFC 6455
 	req, err := http.NewRequest("GET", rawUrl, nil)
@@ -265,7 +257,7 @@ func (t *tabCapture) handleRequest(ev *fetch.EventRequestPaused) {
 		return
 	}
 
-	id := t.generateID()
+	id := modifier.GenerateID()
 
 	req, err := buildRequest(ev.Request)
 	if err != nil {

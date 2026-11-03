@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"container/ring"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -23,7 +22,6 @@ import (
 	"github.com/denandz/glorp/replay"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/google/martian/v3/messageview"
 	"github.com/rivo/tview"
 )
 
@@ -521,39 +519,13 @@ func (view *ProxyView) reloadtable() {
 
 func (view *ProxyView) writeRequest(e *modifier.Entry) {
 	reader := bytes.NewReader(e.Request.Raw)
-	req, err := http.ReadRequest(bufio.NewReader(reader))
-
-	if err != nil {
+	if _, err := http.ReadRequest(bufio.NewReader(reader)); err != nil {
 		log.Printf("[!] Error writeRequest %s\n", err)
 		return
 	}
 
-	switch e.Source {
-	case modifier.SourceBrowser:
-		fmt.Fprint(view.requestBox, string(e.Request.Raw))
-		fmt.Fprint(view.requestBox, "\u2800")
-	default:
-		mv := messageview.New()
-		if err := mv.SnapshotRequest(req); err != nil {
-			log.Printf("[!] Error writeRequest %s\n", err)
-			return
-		}
-
-		br, err := mv.Reader(messageview.Decode())
-		if err != nil {
-			log.Printf("[!] Error writeRequest %s\n", err)
-			return
-		}
-
-		body, err := io.ReadAll(br)
-		if err != nil {
-			log.Printf("[!] Error writeRequest %s\n", err)
-			return
-		}
-
-		fmt.Fprint(view.requestBox, string(body))
-		fmt.Fprint(view.requestBox, "\u2800")
-	}
+	fmt.Fprint(view.requestBox, string(e.Request.Raw))
+	fmt.Fprint(view.requestBox, "\u2800")
 }
 
 func (view *ProxyView) writeResponse(e *modifier.Entry) {
@@ -584,32 +556,12 @@ func (view *ProxyView) writeResponse(e *modifier.Entry) {
 		fmt.Fprint(view.responseBox, "\u2800")
 	default:
 		reader := bytes.NewReader(e.Response.Raw)
-		resp, err := http.ReadResponse(bufio.NewReader(reader), nil)
-
-		if err != nil {
+		if _, err := http.ReadResponse(bufio.NewReader(reader), nil); err != nil {
 			log.Printf("[!] Error writeResponse - http.ReadResponse %s\n", err)
 			return
 		}
 
-		mv := messageview.New()
-		if err := mv.SnapshotResponse(resp); err != nil {
-			log.Printf("[!] Error writeResponse - mv.SnapshotResponse %s\n", err)
-			return
-		}
-
-		br, err := mv.Reader(messageview.Decode())
-		if err != nil {
-			log.Printf("[!] Error writeResponse - mv.Reader %s\n", err)
-			return
-		}
-
-		body, err := io.ReadAll(br)
-		if err != nil {
-			log.Printf("[!] Error writeResponse - io.ReadAll %s\n", err)
-			return
-		}
-
-		fmt.Fprint(view.responseBox, string(body))
+		fmt.Fprint(view.responseBox, string(e.Response.Raw))
 		fmt.Fprint(view.responseBox, "\u2800")
 	}
 }

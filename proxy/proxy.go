@@ -1,20 +1,22 @@
 package proxy
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"log"
+	"math/big"
 	"net"
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/denandz/glorp/modifier"
-
-	"github.com/google/martian/v3"
-	"github.com/google/martian/v3/fifo"
-	"github.com/google/martian/v3/mitm"
+	"github.com/elazarl/goproxy"
 )
 
 // Config - struct that holds the proxy config
@@ -38,15 +40,79 @@ func (config *Config) checkConfig() {
 
 }
 
-// StartProxy - Starts the martian proxy and sets up the modifier. Nil config will set some reasonable defaults
-func StartProxy(logger *modifier.Logger, config *Config) *martian.Proxy {
+// certCache - implements goproxy.CertStorage, caching MITM certificates per host
+type certCache struct {
+	mu    sync.Mutex
+	certs map[string]*tls.Certificate
+}
+
+func newCertCache() *certCache {
+	return &certCache{certs: make(map[string]*tls.Certificate)}
+}
+
+func (c *certCache) Fetch(hostname string, gen func() (*tls.Certificate, error)) (*tls.Certificate, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if cert, ok := c.certs[hostname]; ok {
+		return cert, nil
+	}
+
+	cert, err := gen()
+	if err != nil {
+		return nil, err
+	}
+
+	c.certs[hostname] = cert
+	return cert, nil
+}
+
+// newAuthority generates a self-signed CA certificate and key, used for MITM
+// when no CA is provided in the config
+func newAuthority(commonName string, ttl time.Duration) (*tls.Certificate, error) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, err
+	}
+
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return nil, err
+	}
+
+	template := x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               pkix.Name{CommonName: commonName, Organization: []string{"glorp.proxy"}},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(ttl),
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign | x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}, nil
+}
+
+// StartProxy - Starts the goproxy proxy and sets up the modifier. Nil config will set some reasonable defaults
+func StartProxy(logger *modifier.Logger, config *Config) *goproxy.ProxyHttpServer {
 	if config == nil {
 		config = new(Config)
 	}
 
 	config.checkConfig()
 
-	p := martian.NewProxy()
+	p := goproxy.NewProxyHttpServer()
+
+	// do not cannonicalize headers per usual net/http behaviour
+	p.PreventCanonicalization = true
+
+	// allow clients to speak HTTP/2 (extended CONNECT / h2 MITM), alongside HTTP/1.1
+	p.AllowHTTP2 = true
 
 	tr := &http.Transport{
 		Dial: (&net.Dialer{
@@ -59,20 +125,27 @@ func StartProxy(logger *modifier.Logger, config *Config) *martian.Proxy {
 			InsecureSkipVerify: true,
 		},
 		DisableCompression: true,
+		// attempt HTTP/2 (with automatic fallback to HTTP/1.1) on upstream connections
+		ForceAttemptHTTP2: true,
 	}
-	p.SetRoundTripper(tr)
+	p.Tr = tr
 
 	if config.Proxy != "" {
 		proxyURL, err := url.Parse(config.Proxy)
 		if err != nil {
-			log.Printf("martian: error parsing upstream proxy URL: %v, skipping proxy\n", err)
+			log.Printf("goproxy: error parsing upstream proxy URL: %v, skipping proxy\n", err)
+		} else if proxyURL.Scheme == "socks5" {
+			log.Printf("goproxy: socks5 upstream proxies are not supported, skipping proxy\n")
 		} else {
-			p.SetDownstreamProxy(proxyURL)
+			// route CONNECT tunnels and plain HTTP requests through the upstream proxy
+			if dial := p.NewConnectDialToProxy(config.Proxy); dial != nil {
+				p.ConnectDial = dial
+			}
+			p.Tr.Proxy = http.ProxyURL(proxyURL)
 		}
 	}
 
-	var x509c *x509.Certificate
-	var priv interface{}
+	var ca *tls.Certificate
 	var err error
 
 	if config.Cert != "" && config.Key != "" {
@@ -80,49 +153,53 @@ func StartProxy(logger *modifier.Logger, config *Config) *martian.Proxy {
 		if err != nil {
 			log.Fatal(err)
 		}
-		priv = tlsc.PrivateKey
-
-		x509c, err = x509.ParseCertificate(tlsc.Certificate[0])
-		if err != nil {
-			log.Fatal(err)
-		}
+		ca = &tlsc
 	} else {
-		x509c, priv, err = mitm.NewAuthority("martian.proxy", "Martian Authority", 30*24*time.Hour)
+		ca, err = newAuthority("glorp.proxy", 30*24*time.Hour)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
 
-	if x509c != nil && priv != nil {
-		mc, err := mitm.NewConfig(x509c, priv)
-		if err != nil {
-			log.Fatal(err)
+	// MITM all CONNECT tunnels, signing per-host certificates with our CA
+	p.CertStore = newCertCache()
+	p.OnRequest().HandleConnect(goproxy.FuncHttpsHandler(func(host string, ctx *goproxy.ProxyCtx) (*goproxy.ConnectAction, string) {
+		return &goproxy.ConnectAction{
+			Action:    goproxy.ConnectMitm,
+			TLSConfig: goproxy.TLSConfigFromCA(ca),
+		}, host
+	}))
+
+	p.OnRequest().DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
+		// assign the entry ID here and stash it in the context so the
+		// response handler logs the same ID for the same request/response pair
+		id := modifier.GenerateID()
+		ctx.UserData = id
+		if err := logger.ModifyRequest(id, req); err != nil {
+			log.Printf("goproxy: error logging request: %v\n", err)
 		}
+		return req, nil
+	})
 
-		mc.SkipTLSVerify(true)
-		mc.SetHandshakeErrorCallback(func(req *http.Request, err error) {
-			log.Printf("[!] TLS client handshake error for domain %s: %v\n", req.Host, err)
-		})
-
-		p.SetMITM(mc)
-	}
-
-	topg := fifo.NewGroup()
-
-	topg.AddRequestModifier(logger)
-	topg.AddResponseModifier(logger)
-
-	p.SetRequestModifier(topg)
-	p.SetResponseModifier(topg)
+	p.OnResponse().DoFunc(func(res *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
+		id, _ := ctx.UserData.(string)
+		if id == "" {
+			id = modifier.GenerateID()
+		}
+		if err := logger.ModifyResponse(id, res); err != nil {
+			log.Printf("goproxy: error logging response: %v\n", err)
+		}
+		return res
+	})
 
 	l, err := net.Listen("tcp", config.Addr+":"+strconv.FormatInt(int64(config.Port), 10))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Printf("martian: starting proxy on %s\n", l.Addr().String())
+	log.Printf("goproxy: starting proxy on %s\n", l.Addr().String())
 
-	go p.Serve(l)
+	go http.Serve(l, p)
 
 	return p
 }
