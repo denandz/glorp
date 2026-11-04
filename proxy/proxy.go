@@ -111,6 +111,10 @@ func StartProxy(logger *modifier.Logger, config *Config) *goproxy.ProxyHttpServe
 	// do not cannonicalize headers per usual net/http behaviour
 	p.PreventCanonicalization = true
 
+	// route goproxy's internal messages (ctx.Warnf & co) through the
+	// global logger so they land in the Log page instead of raw stderr
+	p.Logger = log.Default()
+
 	// allow clients to speak HTTP/2 (extended CONNECT / h2 MITM), alongside HTTP/1.1
 	p.AllowHTTP2 = true
 
