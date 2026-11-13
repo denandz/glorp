@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"io"
 	"log"
 	"math/big"
 	"net"
@@ -182,6 +183,12 @@ func StartProxy(logger *modifier.Logger, config *Config) *goproxy.ProxyHttpServe
 		if err := logger.ModifyRequest(id, req); err != nil {
 			log.Printf("goproxy: error logging request: %v\n", err)
 		}
+		// record websocket upgrades with their ws(s) URL, like browser capture
+		if isWebSocketUpgrade(req.Header) {
+			if e := logger.GetEntry(id); e != nil && e.Request != nil {
+				e.Request.URL = wsDisplayURL(req.URL)
+			}
+		}
 		return req, nil
 	})
 
@@ -192,6 +199,13 @@ func StartProxy(logger *modifier.Logger, config *Config) *goproxy.ProxyHttpServe
 		}
 		if err := logger.ModifyResponse(id, res); err != nil {
 			log.Printf("goproxy: error logging response: %v\n", err)
+		}
+		// wrap the 101 body (the live upstream connection) so websocket
+		// frames are logged as they flow through the proxy
+		if res.StatusCode == http.StatusSwitchingProtocols && isWebSocketUpgrade(res.Header) {
+			if rw, ok := res.Body.(io.ReadWriter); ok {
+				res.Body = newWSFrameCodec(rw, logger, ctx.Req.URL)
+			}
 		}
 		return res
 	})

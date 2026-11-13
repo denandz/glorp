@@ -90,12 +90,10 @@ func main() {
 	proxyview := new(views.ProxyView)
 	proxyview.Init(app, replayview, logger, proxychan)
 
-	// create the websocket view if CDP is active
-	var websocketview *views.WebSocketView
-	if *cdpURL != "" {
-		websocketview = new(views.WebSocketView)
-		websocketview.Init(app, logger, wschan)
-	}
+	// websocket frames are captured both via the proxy and via CDP, so
+	// the view is always available
+	websocketview := new(views.WebSocketView)
+	websocketview.Init(app, logger, wschan)
 
 	// View for the logs, create this now so we dont miss logs
 	logText := tview.NewTextView()

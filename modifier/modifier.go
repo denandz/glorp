@@ -177,9 +177,9 @@ func NewRequest(req *http.Request) (*Request, error) {
 	}
 
 	// DumpRequestOut writer hardcodes "HTTP/1.1". Patch the request line
-	// so the dump reflects the protocol the request actually spoke 
+	// so the dump reflects the protocol the request actually spoke
 	// (e.g. HTTP/2 through the h2 MITM path).
-	// TODO: Does it even make sense to use this method of raw storage any more? 
+	// TODO: Does it even make sense to use this method of raw storage any more?
 	// The raw body situation is based on the assumption of a text based protocol,
 	// which HTTP2 is definetly not.
 	if req.Proto != "" && req.Proto != "HTTP/1.1" {
@@ -234,7 +234,10 @@ func NewResponse(res *http.Response) (*Response, error) {
 		Headers:     res.Header.Clone(),
 	}
 
-	raw, err := httputil.DumpResponse(res, true)
+	// 101 responses carry the live websocket connection as their body -
+	// dumping the body would block draining (and then close) it
+	dumpBody := res.StatusCode != http.StatusSwitchingProtocols
+	raw, err := httputil.DumpResponse(res, dumpBody)
 	if err != nil {
 		return nil, err
 	}
